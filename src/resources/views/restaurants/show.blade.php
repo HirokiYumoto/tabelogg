@@ -25,18 +25,18 @@
                             {{-- 平均満足度 --}}
                             <div class="text-3xl font-bold text-orange-500 flex items-center">
                                 <span class="mr-1 text-2xl">★</span>
-                                {{ number_format($restaurant->reviews->avg('rating') ?? 0, 1) }}
+                                {{ number_format($restaurant->reviews_avg_rating ?? 0, 1) }}
                             </div>
 
                             {{-- 口コミ数とお気に入り数 --}}
                             <div class="text-base text-gray-600 flex items-center gap-6 mb-1">
                                 <span class="flex items-center">
                                     <span class="mr-1">💬</span>
-                                    <span class="font-bold">{{ $restaurant->reviews->count() }}</span>件
+                                    <span class="font-bold">{{ $restaurant->reviews_count }}</span>件
                                 </span>
                                 <span class="flex items-center">
                                     <span class="mr-1">🔖</span>
-                                    <span class="font-bold">{{ $restaurant->favorites->count() }}</span>
+                                    <span class="font-bold">{{ $restaurant->favorites_count }}</span>
                                 </span>
                             </div>
                         </div>
@@ -53,7 +53,7 @@
                     {{-- お気に入りボタン --}}
                     @auth
                         <div>
-                            @if($restaurant->favorites()->where('user_id', Auth::id())->exists())
+                            @if($isFavorited)
                                 <form action="{{ route('favorites.destroy', $restaurant->id) }}" method="POST">
                                     @csrf @method('DELETE')
                                     <button type="submit" class="bg-red-50 text-red-500 hover:bg-red-100 border border-red-200 px-6 py-2 rounded-full font-bold flex items-center gap-2 transition">
@@ -99,7 +99,7 @@
                         <li class="mr-2" role="presentation">
                             <button class="inline-block p-4 border-b-2 border-transparent rounded-t-lg hover:text-gray-600 hover:border-gray-300 js-tab-trigger" 
                                     id="reviews-tab" data-target="reviews" type="button" role="tab">
-                                レビュー <span class="bg-gray-100 text-gray-600 py-0.5 px-2 rounded-full text-xs ml-1">{{ $restaurant->reviews->count() }}</span>
+                                レビュー <span class="bg-gray-100 text-gray-600 py-0.5 px-2 rounded-full text-xs ml-1">{{ $restaurant->reviews_count }}</span>
                             </button>
                         </li>
 
@@ -411,32 +411,17 @@
                                         </div>
 
                                         <div class="mb-4">
-                                            <label class="block text-sm font-bold mb-1 text-gray-700">席カテゴリ</label>
-                                            <select id="rv-seat-category" class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring-orange-500" required>
+                                            <label class="block text-sm font-bold mb-1 text-gray-700">席タイプ</label>
+                                            <select name="seat_category" id="rv-seat-category" class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring-orange-500" required>
                                                 <option value="">選択してください</option>
                                                 @if($restaurant->seatTypes->where('type', 'counter')->count() > 0)
-                                                    <option value="counter">カウンター</option>
+                                                    <option value="counter" {{ old('seat_category') === 'counter' ? 'selected' : '' }}>カウンター</option>
                                                 @endif
                                                 @if($restaurant->seatTypes->where('type', 'table')->count() > 0)
-                                                    <option value="table">テーブル</option>
+                                                    <option value="table" {{ old('seat_category') === 'table' ? 'selected' : '' }}>テーブル（自動割当）</option>
                                                 @endif
                                             </select>
-                                        </div>
-
-                                        <div class="mb-4">
-                                            <label class="block text-sm font-bold mb-1 text-gray-700">座席タイプ</label>
-                                            <select name="seat_type_id" id="rv-seat-type" class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring-orange-500" required>
-                                                <option value="">先に席カテゴリを選択</option>
-                                                @foreach ($restaurant->seatTypes as $st)
-                                                    <option value="{{ $st->id }}"
-                                                        data-type="{{ $st->type }}"
-                                                        data-seats-per-unit="{{ $st->seats_per_unit }}"
-                                                        style="display:none;"
-                                                        {{ old('seat_type_id') == $st->id ? 'selected' : '' }}>
-                                                        {{ $st->name }}
-                                                    </option>
-                                                @endforeach
-                                            </select>
+                                            <p id="rv-seat-hint" class="text-xs text-gray-500 mt-1"></p>
                                         </div>
 
                                         <div class="mb-6">
@@ -445,6 +430,9 @@
                                                 value="{{ old('number_of_people', 1) }}"
                                                 class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring-orange-500" required>
                                             <p id="rv-people-hint" class="text-xs text-gray-500 mt-1"></p>
+                                            @if($restaurant->max_party_size)
+                                                <p class="text-xs text-orange-600 mt-1">※ 一度の予約で最大{{ $restaurant->max_party_size }}名まで</p>
+                                            @endif
                                         </div>
 
                                         <button type="submit" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-full transition shadow-md">
@@ -559,47 +547,26 @@
             if (popup) popup.remove();
         }
 
-        // 予約フォーム: カテゴリ連動 + 全角数字変換
+        // 予約フォーム: 全角数字変換 + 席タイプヒント
         (function() {
             const cat = document.getElementById('rv-seat-category');
-            const seatSel = document.getElementById('rv-seat-type');
             const numInput = document.getElementById('rv-number-of-people');
-            const hint = document.getElementById('rv-people-hint');
-            if (!cat || !seatSel) return;
+            const seatHint = document.getElementById('rv-seat-hint');
+            if (!cat) return;
 
             function toHalf(s) { return s.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)); }
             if (numInput) numInput.addEventListener('input', function() { this.value = toHalf(this.value); });
 
             cat.addEventListener('change', function() {
-                const v = this.value;
-                seatSel.value = '';
-                if (hint) hint.textContent = '';
-                seatSel.querySelectorAll('option[data-type]').forEach(o => {
-                    o.style.display = o.dataset.type === v ? '' : 'none';
-                });
-            });
-
-            seatSel.addEventListener('change', function() {
-                const opt = this.options[this.selectedIndex];
-                if (!hint || !opt || !opt.dataset.type) { if (hint) hint.textContent = ''; return; }
-                if (opt.dataset.type === 'counter') {
-                    hint.textContent = 'カウンター席：1名から入力できます';
+                if (!seatHint) return;
+                if (this.value === 'counter') {
+                    seatHint.textContent = 'カウンター席：1名から入力できます';
+                } else if (this.value === 'table') {
+                    seatHint.textContent = 'テーブル席：人数に最適なテーブルを自動で割り当てます';
                 } else {
-                    hint.textContent = 'テーブル席：1卓あたり最大' + opt.dataset.seatsPerUnit + '名まで';
+                    seatHint.textContent = '';
                 }
             });
-
-            // old()による状態復元
-            const oldId = '{{ old("seat_type_id") }}';
-            if (oldId) {
-                const opt = seatSel.querySelector('option[value="' + oldId + '"]');
-                if (opt) {
-                    cat.value = opt.dataset.type;
-                    cat.dispatchEvent(new Event('change'));
-                    seatSel.value = oldId;
-                    seatSel.dispatchEvent(new Event('change'));
-                }
-            }
         })();
 
         // モーダル機能

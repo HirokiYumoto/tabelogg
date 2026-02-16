@@ -9,30 +9,13 @@ use App\Models\Prefecture;
 use App\Models\City;
 use App\Models\Genre;
 use App\Models\RestaurantSeatType;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use App\Models\RestaurantTimeSetting;
 use Illuminate\Support\Facades\Http;
 
 class RestaurantController extends Controller
 {
-        public function __construct () {
-\Illuminate\Support\Facades\DB::listen(function (\Illuminate\Database\Events\QueryExecuted $query) {
-            $bindings = collect($query->bindings)->map(function ($b) {
-                switch (true) {
-                    case is_null($b): return 'NULL';
-                    case is_bool($b): return $b ? 'TRUE' : 'FALSE';
-                    case $b instanceof \DateTimeInterface:
-                        return "'" . $b->format('Y-m-d H:i:s') . "'";
-                    case is_numeric($b): return (string) $b;
-                    default: return "'" . addslashes((string) $b) . "'";
-                }
-            })->all();
-            $sql = \Illuminate\Support\Str::replaceArray('?', $bindings, $query->sql);
-            $truncated = \Illuminate\Support\Str::limit($sql, 200, ' …');
-            \Illuminate\Support\Facades\Log::info("Query: {$truncated} ({$query->time} ms)");
-        });
-
-}
     /**
      * 店舗一覧表示（検索機能・並び替え機能付き）
      */
@@ -41,7 +24,8 @@ class RestaurantController extends Controller
         // ベースのクエリ
         // 並び替えに必要なデータ（評価平均、レビュー数、お気に入り数）を事前に計算
         $query = Restaurant::query()
-            ->with('city.prefecture')
+            ->select(['id', 'name', 'description', 'city_id', 'latitude', 'longitude', 'created_at'])
+            ->with(['city.prefecture', 'images:id,restaurant_id,image_path'])
             ->withAvg('reviews', 'rating')  // reviews_avg_rating
             ->withCount('reviews')          // reviews_count
             ->withCount('favorites');       // favorites_count
@@ -61,9 +45,7 @@ class RestaurantController extends Controller
 
         // 2. エリア選択（プルダウン）による絞り込み
         if ($request->filled('prefecture_id')) {
-            $query->whereHas('city', function($q) use ($request) {
-                $q->where('prefecture_id', $request->prefecture_id);
-            });
+            $query->whereIn('city_id', City::where('prefecture_id', $request->prefecture_id)->select('id'));
         }
 
         // 3. 並び替えロジック
@@ -76,8 +58,7 @@ class RestaurantController extends Controller
                 // 現在地から近い順（位置情報がある場合のみ）
                 if ($lat && $lng) {
                     // 球面三角法で距離を計算し、distanceという名前で取得して並び替え
-                    $query->select('*')
-                        ->selectRaw(
+                    $query->selectRaw(
                             '(6371 * acos(cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)))) AS distance',
                             [$lat, $lng, $lat]
                         )
@@ -109,7 +90,9 @@ class RestaurantController extends Controller
         // ページネーション（検索条件を維持するためのappendsを追加）
         $restaurants = $query->paginate(12)->appends($request->all());
         
-        $prefectures = Prefecture::all();
+        $prefectures = cache()->store('array')->remember('headerPrefectures', 60, function () {
+            return Prefecture::all();
+        });
 
         return view('restaurants.index', compact('restaurants', 'prefectures'));
     }
@@ -119,8 +102,24 @@ class RestaurantController extends Controller
      */
     public function show($id)
     {
-        $restaurant = Restaurant::with(['city', 'reviews.user', 'images', 'seatTypes', 'favorites', 'timeSettings'])->findOrFail($id);
-        return view('restaurants.show', compact('restaurant'));
+        $restaurant = Restaurant::with([
+                'city.prefecture',
+                'reviews.user',
+                'reviews.images',
+                'images',
+                'seatTypes',
+                'timeSettings',
+            ])
+            ->withCount('favorites')
+            ->withAvg('reviews', 'rating')
+            ->withCount('reviews')
+            ->findOrFail($id);
+
+        $isFavorited = Auth::check()
+            ? $restaurant->favorites()->where('user_id', Auth::id())->exists()
+            : false;
+
+        return view('restaurants.show', compact('restaurant', 'isFavorited'));
     }
 
     /**
@@ -146,6 +145,7 @@ class RestaurantController extends Controller
             'address' => 'required|string|max:255',
             'nearest_station' => 'nullable|string|max:255',
             'menu_info' => 'nullable|string',
+            'max_party_size' => 'nullable|integer|min:1',
             'images.*' => 'nullable|image|max:2048',
             'seat_types' => 'nullable|array',
             'seat_types.*.type' => 'required_with:seat_types|in:counter,table',
@@ -195,6 +195,7 @@ class RestaurantController extends Controller
             'address' => $request->address,
             'nearest_station' => $request->nearest_station,
             'menu_info' => $request->menu_info,
+            'max_party_size' => $request->max_party_size,
             'user_id' => auth()->id(),
             'latitude' => $latitude,
             'longitude' => $longitude,
@@ -211,34 +212,41 @@ class RestaurantController extends Controller
             }
         }
 
-        // 5. 座席タイプの保存
+        // 5. 座席タイプの一括保存
         if ($request->has('seat_types')) {
-            foreach ($request->seat_types as $st) {
+            $now = now();
+            $seatRows = collect($request->seat_types)->map(function ($st) use ($restaurant, $now) {
                 $type = $st['type'];
                 $capacity = (int) $st['capacity'];
                 $seatsPerUnit = (int) $st['seats_per_unit'];
-
-                RestaurantSeatType::create([
+                return [
                     'restaurant_id' => $restaurant->id,
                     'name' => RestaurantSeatType::generateName($type, $seatsPerUnit, $capacity),
                     'type' => $type,
                     'seats_per_unit' => $seatsPerUnit,
                     'capacity' => $capacity,
-                ]);
-            }
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            })->all();
+            RestaurantSeatType::insert($seatRows);
         }
 
-        // 6. 営業時間の保存
+        // 6. 営業時間の一括保存
         if ($request->has('time_settings')) {
-            foreach ($request->time_settings as $ts) {
-                RestaurantTimeSetting::create([
+            $now = now();
+            $timeRows = collect($request->time_settings)->map(function ($ts) use ($restaurant, $now) {
+                return [
                     'restaurant_id' => $restaurant->id,
                     'day_of_week' => (int) $ts['day_of_week'],
                     'start_time' => $ts['start_time'],
                     'end_time' => $ts['end_time'],
                     'stay_minutes' => (int) $ts['stay_minutes'],
-                ]);
-            }
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            })->all();
+            RestaurantTimeSetting::insert($timeRows);
         }
 
         return redirect()->route('dashboard')->with('success', '店舗を登録しました！');
@@ -276,6 +284,7 @@ class RestaurantController extends Controller
             'address' => 'required|string|max:255',
             'nearest_station' => 'nullable|string|max:255',
             'menu_info' => 'nullable|string',
+            'max_party_size' => 'nullable|integer|min:1',
             'images.*' => 'nullable|image|max:2048',
             'seat_types' => 'nullable|array',
             'seat_types.*.type' => 'required_with:seat_types|in:counter,table',
@@ -322,6 +331,7 @@ class RestaurantController extends Controller
             'address' => $request->address,
             'nearest_station' => $request->nearest_station,
             'menu_info' => $request->menu_info,
+            'max_party_size' => $request->max_party_size,
             'latitude' => $latitude,
             'longitude' => $longitude,
         ]);
@@ -337,35 +347,43 @@ class RestaurantController extends Controller
             }
         }
 
-        // 座席タイプ: 削除して再作成
+        // 座席タイプ: 削除して一括再作成
         $restaurant->seatTypes()->delete();
         if ($request->has('seat_types')) {
-            foreach ($request->seat_types as $st) {
+            $now = now();
+            $seatRows = collect($request->seat_types)->map(function ($st) use ($restaurant, $now) {
                 $type = $st['type'];
                 $capacity = (int) $st['capacity'];
                 $seatsPerUnit = (int) $st['seats_per_unit'];
-                RestaurantSeatType::create([
+                return [
                     'restaurant_id' => $restaurant->id,
                     'name' => RestaurantSeatType::generateName($type, $seatsPerUnit, $capacity),
                     'type' => $type,
                     'seats_per_unit' => $seatsPerUnit,
                     'capacity' => $capacity,
-                ]);
-            }
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            })->all();
+            RestaurantSeatType::insert($seatRows);
         }
 
-        // 営業時間: 削除して再作成
+        // 営業時間: 削除して一括再作成
         $restaurant->timeSettings()->delete();
         if ($request->has('time_settings')) {
-            foreach ($request->time_settings as $ts) {
-                RestaurantTimeSetting::create([
+            $now = now();
+            $timeRows = collect($request->time_settings)->map(function ($ts) use ($restaurant, $now) {
+                return [
                     'restaurant_id' => $restaurant->id,
                     'day_of_week' => (int) $ts['day_of_week'],
                     'start_time' => $ts['start_time'],
                     'end_time' => $ts['end_time'],
                     'stay_minutes' => (int) $ts['stay_minutes'],
-                ]);
-            }
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            })->all();
+            RestaurantTimeSetting::insert($timeRows);
         }
 
         return redirect()->route('restaurants.show', $restaurant->id)->with('success_update', '店舗情報を更新しました！');

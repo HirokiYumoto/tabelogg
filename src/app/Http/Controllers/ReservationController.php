@@ -38,7 +38,7 @@ class ReservationController extends Controller
     }
 
     /**
-     * 予約実行ロジック
+     * 予約実行ロジック（ベストフィット自動割当）
      */
     public function store(Request $request, Restaurant $restaurant)
     {
@@ -49,11 +49,18 @@ class ReservationController extends Controller
 
         // 1. 入力値のバリデーション
         $request->validate([
-            'seat_type_id' => 'required|exists:restaurant_seat_types,id',
+            'seat_category' => 'required|in:counter,table',
             'reservation_date' => 'required|date',
             'reservation_time' => 'required|date_format:H:i',
             'number_of_people' => 'required|integer|min:1',
         ]);
+
+        $requestedPeople = (int) $request->number_of_people;
+
+        // 1.5 一予約あたりの最大人数チェック
+        if ($restaurant->max_party_size && $requestedPeople > $restaurant->max_party_size) {
+            return back()->withErrors(['error' => "一度の予約で最大{$restaurant->max_party_size}名までです。"])->withInput();
+        }
 
         // 予約開始日時をCarbonインスタンス化
         $startDateTime = Carbon::parse($request->reservation_date . ' ' . $request->reservation_time);
@@ -73,33 +80,57 @@ class ReservationController extends Controller
         // 3. 終了時間を計算
         $endDateTime = $startDateTime->copy()->addMinutes($timeSetting->stay_minutes);
 
-        // 4. 空席チェック（タイプ別）
-        $seatType = RestaurantSeatType::find($request->seat_type_id);
-        $capacity = $seatType->capacity;
-        $requestedPeople = (int) $request->number_of_people;
+        // 4. 席の自動割当（ベストフィット）
+        $seatType = null;
 
-        $overlapQuery = Reservation::where('restaurant_id', $restaurant->id)
-            ->where('restaurant_seat_type_id', $seatType->id)
-            ->where(function ($query) use ($startDateTime, $endDateTime) {
-                $query->where('reserved_at', '<', $endDateTime)
-                      ->where('end_at', '>', $startDateTime);
-            });
-
-        if ($seatType->type === 'counter') {
+        if ($request->seat_category === 'counter') {
             // カウンター: 人数の合計で判定
-            $occupiedSeats = (clone $overlapQuery)->sum('number_of_people');
-            if (($occupiedSeats + $requestedPeople) > $capacity) {
+            $seatType = $restaurant->seatTypes()->where('type', 'counter')->first();
+            if (!$seatType) {
+                return back()->withErrors(['error' => 'カウンター席が登録されていません。'])->withInput();
+            }
+
+            $occupiedSeats = Reservation::where('restaurant_id', $restaurant->id)
+                ->where('restaurant_seat_type_id', $seatType->id)
+                ->where(function ($query) use ($startDateTime, $endDateTime) {
+                    $query->where('reserved_at', '<', $endDateTime)
+                          ->where('end_at', '>', $startDateTime);
+                })->sum('number_of_people');
+
+            if (($occupiedSeats + $requestedPeople) > $seatType->capacity) {
                 return back()->withErrors(['error' => '申し訳ありません。カウンター席の空きが足りません。'])->withInput();
             }
         } else {
-            // テーブル: 予約件数で判定（1予約=1テーブル）
-            $occupiedTables = (clone $overlapQuery)->count();
-            if (($occupiedTables + 1) > $capacity) {
-                return back()->withErrors(['error' => '申し訳ありません。テーブルの空きがありません。'])->withInput();
+            // テーブル: ベストフィット（seats_per_unit昇順で最小の空きテーブルを探す）
+            $candidates = $restaurant->seatTypes()
+                ->where('type', 'table')
+                ->where('seats_per_unit', '>=', $requestedPeople)
+                ->orderBy('seats_per_unit', 'asc')
+                ->get();
+
+            if ($candidates->isEmpty()) {
+                return back()->withErrors(['error' => "{$requestedPeople}名が着席できるテーブルがありません。"])->withInput();
             }
-            // 人数がテーブルの席数を超えていないかチェック
-            if ($requestedPeople > $seatType->seats_per_unit) {
-                return back()->withErrors(['error' => "このテーブルは最大{$seatType->seats_per_unit}名までです。"])->withInput();
+
+            $occupiedCounts = Reservation::where('restaurant_id', $restaurant->id)
+                ->whereIn('restaurant_seat_type_id', $candidates->pluck('id'))
+                ->where(function ($query) use ($startDateTime, $endDateTime) {
+                    $query->where('reserved_at', '<', $endDateTime)
+                          ->where('end_at', '>', $startDateTime);
+                })
+                ->selectRaw('restaurant_seat_type_id, COUNT(*) as occupied_count')
+                ->groupBy('restaurant_seat_type_id')
+                ->pluck('occupied_count', 'restaurant_seat_type_id');
+
+            foreach ($candidates as $candidate) {
+                if ($occupiedCounts->get($candidate->id, 0) < $candidate->capacity) {
+                    $seatType = $candidate;
+                    break;
+                }
+            }
+
+            if (!$seatType) {
+                return back()->withErrors(['error' => '申し訳ありません。空きテーブルがありません。'])->withInput();
             }
         }
 

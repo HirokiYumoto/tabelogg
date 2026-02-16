@@ -83,6 +83,13 @@
                             </button>
                         </div>
 
+                        {{-- 一予約あたりの最大人数 --}}
+                        <div class="mb-6">
+                            <label class="block text-gray-700 font-bold mb-2">一予約あたりの最大人数（任意）</label>
+                            <input type="number" name="max_party_size" min="1" value="{{ old('max_party_size') }}" class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring-orange-500" placeholder="例：8">
+                            <p class="text-xs text-gray-500 mt-1">※未入力の場合は人数制限なしになります</p>
+                        </div>
+
                         {{-- 営業時間設定 --}}
                         <div class="mb-6">
                             <label class="block text-gray-700 font-bold mb-2">営業時間（任意）</label>
@@ -103,41 +110,11 @@
                                                 onchange="toggleDayFields({{ $dayNum }})">
                                             <span class="font-bold text-sm text-gray-700">{{ $dayName }}</span>
                                         </label>
-                                        <div id="day-fields-{{ $dayNum }}" class="hidden mt-3">
-                                            <input type="hidden" name="time_settings[{{ $dayNum }}][day_of_week]" value="{{ $dayNum }}" disabled>
-                                            <div class="grid grid-cols-3 gap-3">
-                                                <div>
-                                                    <label class="block text-xs text-gray-600 mb-1">開始時間</label>
-                                                    <select name="time_settings[{{ $dayNum }}][start_time]" class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring-orange-500 text-sm" disabled>
-                                                        @for($h = 0; $h < 24; $h++)
-                                                            @for($m = 0; $m < 60; $m += 15)
-                                                                <option value="{{ sprintf('%02d:%02d', $h, $m) }}" {{ $h == 11 && $m == 0 ? 'selected' : '' }}>{{ sprintf('%02d:%02d', $h, $m) }}</option>
-                                                            @endfor
-                                                        @endfor
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label class="block text-xs text-gray-600 mb-1">終了時間</label>
-                                                    <select name="time_settings[{{ $dayNum }}][end_time]" class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring-orange-500 text-sm" disabled>
-                                                        @for($h = 0; $h < 24; $h++)
-                                                            @for($m = 0; $m < 60; $m += 15)
-                                                                <option value="{{ sprintf('%02d:%02d', $h, $m) }}" {{ $h == 21 && $m == 0 ? 'selected' : '' }}>{{ sprintf('%02d:%02d', $h, $m) }}</option>
-                                                            @endfor
-                                                        @endfor
-                                                        <option value="24:00">24:00</option>
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label class="block text-xs text-gray-600 mb-1">滞在時間</label>
-                                                    <select name="time_settings[{{ $dayNum }}][stay_minutes]" class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring-orange-500 text-sm" disabled>
-                                                        <option value="30">30分</option>
-                                                        <option value="60" selected>60分</option>
-                                                        <option value="90">90分</option>
-                                                        <option value="120">120分</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <div id="day-slots-{{ $dayNum }}" class="hidden mt-3 space-y-3"></div>
+                                        <button type="button" id="add-slot-btn-{{ $dayNum }}" class="hidden mt-2 text-xs bg-white hover:bg-gray-100 text-gray-600 font-bold py-1.5 px-3 rounded-full transition border border-gray-300"
+                                            onclick="addTimeSlot({{ $dayNum }})">
+                                            ＋ 時間帯を追加
+                                        </button>
                                     </div>
                                 @endforeach
                             </div>
@@ -227,16 +204,108 @@
             if (row) row.remove();
         }
 
+        // ===== 営業時間スロット管理 =====
+        const daySlotCounts = {};
+        const MAX_SLOTS = 3;
+
+        function generateTimeOptions(selectedVal) {
+            let html = '';
+            for (let h = 0; h < 24; h++) {
+                for (let m = 0; m < 60; m += 15) {
+                    const val = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+                    html += '<option value="' + val + '"' + (val === selectedVal ? ' selected' : '') + '>' + val + '</option>';
+                }
+            }
+            return html;
+        }
+
+        function generateEndTimeOptions(selectedVal) {
+            let html = generateTimeOptions(selectedVal);
+            html += '<option value="24:00"' + (selectedVal === '24:00' ? ' selected' : '') + '>24:00</option>';
+            return html;
+        }
+
+        function addTimeSlot(dayNum, startTime, endTime, stayMinutes) {
+            startTime = startTime || '11:00';
+            endTime = endTime || '21:00';
+            stayMinutes = stayMinutes || '60';
+
+            if (!daySlotCounts[dayNum]) daySlotCounts[dayNum] = 0;
+            const slotIdx = daySlotCounts[dayNum];
+            if (slotIdx >= MAX_SLOTS) return;
+
+            const key = dayNum + '_' + slotIdx;
+            const container = document.getElementById('day-slots-' + dayNum);
+            const slot = document.createElement('div');
+            slot.id = 'time-slot-' + key;
+            slot.className = 'border border-gray-100 rounded-md p-3 bg-white';
+            slot.innerHTML = `
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-bold text-gray-500">時間帯 ${slotIdx + 1}</span>
+                    <button type="button" onclick="removeTimeSlot('${key}', ${dayNum})" class="text-red-400 hover:text-red-600 text-xs font-bold">削除</button>
+                </div>
+                <input type="hidden" name="time_settings[${key}][day_of_week]" value="${dayNum}">
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs text-gray-600 mb-1">開始時間</label>
+                        <select name="time_settings[${key}][start_time]" class="${inputClass} text-sm">
+                            ${generateTimeOptions(startTime)}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-600 mb-1">終了時間</label>
+                        <select name="time_settings[${key}][end_time]" class="${inputClass} text-sm">
+                            ${generateEndTimeOptions(endTime)}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-600 mb-1">滞在時間</label>
+                        <select name="time_settings[${key}][stay_minutes]" class="${inputClass} text-sm">
+                            <option value="30"${stayMinutes == 30 ? ' selected' : ''}>30分</option>
+                            <option value="60"${stayMinutes == 60 ? ' selected' : ''}>60分</option>
+                            <option value="90"${stayMinutes == 90 ? ' selected' : ''}>90分</option>
+                            <option value="120"${stayMinutes == 120 ? ' selected' : ''}>120分</option>
+                        </select>
+                    </div>
+                </div>
+            `;
+            container.appendChild(slot);
+            daySlotCounts[dayNum]++;
+            updateAddSlotBtn(dayNum);
+        }
+
+        function removeTimeSlot(key, dayNum) {
+            const slot = document.getElementById('time-slot-' + key);
+            if (slot) slot.remove();
+            daySlotCounts[dayNum]--;
+            updateAddSlotBtn(dayNum);
+        }
+
+        function updateAddSlotBtn(dayNum) {
+            const btn = document.getElementById('add-slot-btn-' + dayNum);
+            const count = daySlotCounts[dayNum] || 0;
+            if (count >= MAX_SLOTS) {
+                btn.classList.add('hidden');
+            } else {
+                btn.classList.remove('hidden');
+            }
+        }
+
         function toggleDayFields(dayNum) {
-            const fields = document.getElementById('day-fields-' + dayNum);
-            const inputs = fields.querySelectorAll('select, input[type="hidden"]');
+            const container = document.getElementById('day-slots-' + dayNum);
+            const btn = document.getElementById('add-slot-btn-' + dayNum);
             const checkbox = document.querySelector('.js-day-toggle[data-day="' + dayNum + '"]');
             if (checkbox.checked) {
-                fields.classList.remove('hidden');
-                inputs.forEach(el => el.disabled = false);
+                container.classList.remove('hidden');
+                btn.classList.remove('hidden');
+                if (!daySlotCounts[dayNum] || daySlotCounts[dayNum] === 0) {
+                    addTimeSlot(dayNum);
+                }
             } else {
-                fields.classList.add('hidden');
-                inputs.forEach(el => el.disabled = true);
+                container.classList.add('hidden');
+                btn.classList.add('hidden');
+                container.innerHTML = '';
+                daySlotCounts[dayNum] = 0;
             }
         }
     </script>
