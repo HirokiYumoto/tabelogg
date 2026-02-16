@@ -41,6 +41,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/restaurants/{restaurant}/reservations/create', [ReservationController::class, 'create'])->name('reservations.create');
     Route::post('/restaurants/{restaurant}/reservations', [ReservationController::class, 'store'])->name('reservations.store');
     Route::delete('/reservations/{reservation}', [ReservationController::class, 'destroy'])->name('reservations.destroy');
+
+    // 予約空き状況API
+    Route::get('/restaurants/{restaurant}/reservations/available-dates', [ReservationController::class, 'availableDates'])->name('reservations.available-dates');
+    Route::get('/restaurants/{restaurant}/reservations/available-times', [ReservationController::class, 'availableTimes'])->name('reservations.available-times');
+    Route::get('/restaurants/{restaurant}/reservations/available-seats', [ReservationController::class, 'availableSeats'])->name('reservations.available-seats');
 });
 
 /*

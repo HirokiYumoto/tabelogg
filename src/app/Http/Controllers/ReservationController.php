@@ -4,26 +4,40 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use App\Models\Restaurant;
 use App\Models\Reservation;
 use App\Models\RestaurantSeatType;
 use App\Models\RestaurantTimeSetting;
 use Carbon\Carbon;
+use App\Services\ReservationAvailabilityService;
 
 class ReservationController extends Controller
 {
+    private ReservationAvailabilityService $availability;
+
+    public function __construct(ReservationAvailabilityService $availability)
+    {
+        parent::__construct();
+        $this->availability = $availability;
+    }
+
     /**
      * マイ予約一覧
      */
     public function index()
     {
-        $reservations = Auth::user()->reservations()
+        $upcoming = Auth::user()->reservations()
             ->with(['restaurant', 'seatType'])
-            ->orderBy('reserved_at', 'desc')
-            ->get();
+            ->where('reserved_at', '>=', now())
+            ->orderBy('reserved_at', 'asc')
+            ->paginate(20, ['*'], 'upcoming_page');
 
-        $upcoming = $reservations->where('reserved_at', '>=', now());
-        $past = $reservations->where('reserved_at', '<', now());
+        $past = Auth::user()->reservations()
+            ->with(['restaurant', 'seatType'])
+            ->where('reserved_at', '<', now())
+            ->orderBy('reserved_at', 'desc')
+            ->paginate(20, ['*'], 'past_page');
 
         return view('reservations.index', compact('upcoming', 'past'));
     }
@@ -50,7 +64,7 @@ class ReservationController extends Controller
         // 1. 入力値のバリデーション
         $request->validate([
             'seat_category' => 'required|in:counter,table',
-            'reservation_date' => 'required|date',
+            'reservation_date' => 'required|date|after_or_equal:today',
             'reservation_time' => 'required|date_format:H:i',
             'number_of_people' => 'required|integer|min:1',
         ]);
@@ -80,71 +94,77 @@ class ReservationController extends Controller
         // 3. 終了時間を計算
         $endDateTime = $startDateTime->copy()->addMinutes($timeSetting->stay_minutes);
 
-        // 4. 席の自動割当（ベストフィット）
-        $seatType = null;
+        // 4. 席の自動割当（ベストフィット）- トランザクション+排他ロックで同時予約を防止
+        return DB::transaction(function () use ($request, $restaurant, $requestedPeople, $startDateTime, $endDateTime) {
+            $seatType = null;
 
-        if ($request->seat_category === 'counter') {
-            // カウンター: 人数の合計で判定
-            $seatType = $restaurant->seatTypes()->where('type', 'counter')->first();
-            if (!$seatType) {
-                return back()->withErrors(['error' => 'カウンター席が登録されていません。'])->withInput();
-            }
+            if ($request->seat_category === 'counter') {
+                // カウンター: 人数の合計で判定（席タイプを排他ロック）
+                $seatType = $restaurant->seatTypes()->where('type', 'counter')->lockForUpdate()->first();
+                if (!$seatType) {
+                    return back()->withErrors(['error' => 'カウンター席が登録されていません。'])->withInput();
+                }
 
-            $occupiedSeats = Reservation::where('restaurant_id', $restaurant->id)
-                ->where('restaurant_seat_type_id', $seatType->id)
-                ->where(function ($query) use ($startDateTime, $endDateTime) {
-                    $query->where('reserved_at', '<', $endDateTime)
-                          ->where('end_at', '>', $startDateTime);
-                })->sum('number_of_people');
+                $occupiedSeats = Reservation::where('restaurant_id', $restaurant->id)
+                    ->where('restaurant_seat_type_id', $seatType->id)
+                    ->where(function ($query) use ($startDateTime, $endDateTime) {
+                        $query->where('reserved_at', '<', $endDateTime)
+                              ->where('end_at', '>', $startDateTime);
+                    })
+                    ->lockForUpdate()
+                    ->sum('number_of_people');
 
-            if (($occupiedSeats + $requestedPeople) > $seatType->capacity) {
-                return back()->withErrors(['error' => '申し訳ありません。カウンター席の空きが足りません。'])->withInput();
-            }
-        } else {
-            // テーブル: ベストフィット（seats_per_unit昇順で最小の空きテーブルを探す）
-            $candidates = $restaurant->seatTypes()
-                ->where('type', 'table')
-                ->where('seats_per_unit', '>=', $requestedPeople)
-                ->orderBy('seats_per_unit', 'asc')
-                ->get();
+                if (($occupiedSeats + $requestedPeople) > $seatType->capacity) {
+                    return back()->withErrors(['error' => '申し訳ありません。カウンター席の空きが足りません。'])->withInput();
+                }
+            } else {
+                // テーブル: ベストフィット（seats_per_unit昇順で最小の空きテーブルを探す、排他ロック）
+                $candidates = $restaurant->seatTypes()
+                    ->where('type', 'table')
+                    ->where('seats_per_unit', '>=', $requestedPeople)
+                    ->orderBy('seats_per_unit', 'asc')
+                    ->lockForUpdate()
+                    ->get();
 
-            if ($candidates->isEmpty()) {
-                return back()->withErrors(['error' => "{$requestedPeople}名が着席できるテーブルがありません。"])->withInput();
-            }
+                if ($candidates->isEmpty()) {
+                    return back()->withErrors(['error' => "{$requestedPeople}名が着席できるテーブルがありません。"])->withInput();
+                }
 
-            $occupiedCounts = Reservation::where('restaurant_id', $restaurant->id)
-                ->whereIn('restaurant_seat_type_id', $candidates->pluck('id'))
-                ->where(function ($query) use ($startDateTime, $endDateTime) {
-                    $query->where('reserved_at', '<', $endDateTime)
-                          ->where('end_at', '>', $startDateTime);
-                })
-                ->selectRaw('restaurant_seat_type_id, COUNT(*) as occupied_count')
-                ->groupBy('restaurant_seat_type_id')
-                ->pluck('occupied_count', 'restaurant_seat_type_id');
+                $occupiedCounts = Reservation::where('restaurant_id', $restaurant->id)
+                    ->whereIn('restaurant_seat_type_id', $candidates->pluck('id'))
+                    ->where(function ($query) use ($startDateTime, $endDateTime) {
+                        $query->where('reserved_at', '<', $endDateTime)
+                              ->where('end_at', '>', $startDateTime);
+                    })
+                    ->lockForUpdate()
+                    ->selectRaw('restaurant_seat_type_id, COUNT(*) as occupied_count')
+                    ->groupBy('restaurant_seat_type_id')
+                    ->pluck('occupied_count', 'restaurant_seat_type_id');
 
-            foreach ($candidates as $candidate) {
-                if ($occupiedCounts->get($candidate->id, 0) < $candidate->capacity) {
-                    $seatType = $candidate;
-                    break;
+                foreach ($candidates as $candidate) {
+                    if ($occupiedCounts->get($candidate->id, 0) < $candidate->capacity) {
+                        $seatType = $candidate;
+                        break;
+                    }
+                }
+
+                if (!$seatType) {
+                    return back()->withErrors(['error' => '申し訳ありません。空きテーブルがありません。'])->withInput();
                 }
             }
 
-            if (!$seatType) {
-                return back()->withErrors(['error' => '申し訳ありません。空きテーブルがありません。'])->withInput();
-            }
-        }
+            Reservation::create([
+                'user_id' => Auth::id(),
+                'restaurant_id' => $restaurant->id,
+                'restaurant_seat_type_id' => $seatType->id,
+                'reserved_at' => $startDateTime,
+                'end_at' => $endDateTime,
+                'number_of_people' => $requestedPeople,
+            ]);
 
-        Reservation::create([
-            'user_id' => Auth::id(),
-            'restaurant_id' => $restaurant->id,
-            'restaurant_seat_type_id' => $seatType->id,
-            'reserved_at' => $startDateTime,
-            'end_at' => $endDateTime,
-            'number_of_people' => $requestedPeople,
-        ]);
-
-        return redirect()->route('restaurants.show', $restaurant->id)
-            ->with('success', '予約が完了しました！');
+            return redirect()->route('restaurants.show', $restaurant->id)
+                ->with('success', '予約が完了しました！');
+        });
     }
 
     /**
@@ -160,5 +180,73 @@ class ReservationController extends Controller
 
         return redirect()->route('reservations.index')
             ->with('success', '予約をキャンセルしました。');
+    }
+
+    /**
+     * API: 月内の予約可能な日付を返す
+     */
+    public function availableDates(Request $request, Restaurant $restaurant)
+    {
+        $request->validate([
+            'people' => 'required|integer|min:1',
+            'year'   => 'required|integer',
+            'month'  => 'required|integer|between:1,12',
+        ]);
+
+        $people = (int) $request->people;
+
+        if ($restaurant->max_party_size && $people > $restaurant->max_party_size) {
+            return response()->json([
+                'dates' => [],
+                'error' => "一度の予約で最大{$restaurant->max_party_size}名までです。",
+            ]);
+        }
+
+        $restaurant->load(['seatTypes', 'timeSettings']);
+
+        $dates = $this->availability->getAvailableDates(
+            $restaurant, $people, (int) $request->year, (int) $request->month
+        );
+
+        return response()->json(['dates' => $dates]);
+    }
+
+    /**
+     * API: 指定日の予約可能な時間帯を返す
+     */
+    public function availableTimes(Request $request, Restaurant $restaurant)
+    {
+        $request->validate([
+            'people' => 'required|integer|min:1',
+            'date'   => 'required|date',
+        ]);
+
+        $restaurant->load(['seatTypes', 'timeSettings']);
+
+        $times = $this->availability->getAvailableTimes(
+            $restaurant, (int) $request->people, $request->date
+        );
+
+        return response()->json(['times' => $times]);
+    }
+
+    /**
+     * API: 指定日時の予約可能な席カテゴリを返す
+     */
+    public function availableSeats(Request $request, Restaurant $restaurant)
+    {
+        $request->validate([
+            'people' => 'required|integer|min:1',
+            'date'   => 'required|date',
+            'time'   => 'required|date_format:H:i',
+        ]);
+
+        $restaurant->load(['seatTypes', 'timeSettings']);
+
+        $seats = $this->availability->getAvailableSeats(
+            $restaurant, (int) $request->people, $request->date, $request->time
+        );
+
+        return response()->json(['seats' => $seats]);
     }
 }

@@ -43,6 +43,7 @@
                             </div>
                         @endforeach
                     </div>
+                    <div class="mt-4">{{ $upcoming->links() }}</div>
                 @endif
             </section>
 
@@ -68,6 +69,7 @@
                             </div>
                         @endforeach
                     </div>
+                    <div class="mt-4">{{ $past->links() }}</div>
                 @endif
             </section>
 

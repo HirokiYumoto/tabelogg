@@ -21,9 +21,9 @@ class OwnerController extends Controller
         // with()を使うことで、user情報とseatType情報を一度に取ってくる（高速化）
         $reservations = Reservation::with(['user', 'seatType'])
             ->where('restaurant_id', $restaurant->id)
-            ->where('reserved_at', '>=', $today) // 今日以降
-            ->orderBy('reserved_at', 'asc')       // 日付が近い順
-            ->get();
+            ->where('reserved_at', '>=', $today)
+            ->orderBy('reserved_at', 'asc')
+            ->paginate(30);
 
         return view('owner.dashboard', compact('restaurant', 'reservations'));
     }
