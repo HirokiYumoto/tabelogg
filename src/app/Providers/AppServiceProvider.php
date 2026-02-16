@@ -21,10 +21,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // ★追加：ヘッダー（components.site-header）が表示される時は、
-        // 常に $headerPrefectures という変数で都道府県データを渡す
+        // ヘッダーのエリアドロップダウン用：1リクエストにつき1回だけ取得
         View::composer('components.site-header', function ($view) {
-            $view->with('headerPrefectures', Prefecture::all());
+            $prefectures = cache()->store('array')->remember('headerPrefectures', 60, function () {
+                return Prefecture::all();
+            });
+            $view->with('headerPrefectures', $prefectures);
         });
     }
 }

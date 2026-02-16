@@ -24,7 +24,7 @@
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900">
                     <h3 class="text-lg font-bold mb-4 border-b pb-2 flex items-center gap-2">
-                        👤 ユーザー管理 <span class="text-sm font-normal text-gray-500">({{ $users->count() }}名)</span>
+                        👤 ユーザー管理 <span class="text-sm font-normal text-gray-500">({{ $users->total() }}名)</span>
                     </h3>
                     <div class="overflow-x-auto">
                         <table class="min-w-full text-left text-sm whitespace-nowrap">
@@ -63,6 +63,7 @@
                             </tbody>
                         </table>
                     </div>
+                    <div class="mt-4">{{ $users->links() }}</div>
                 </div>
             </div>
 
@@ -70,7 +71,7 @@
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900">
                     <h3 class="text-lg font-bold mb-4 border-b pb-2 flex items-center gap-2">
-                        🍜 店舗管理 <span class="text-sm font-normal text-gray-500">({{ $restaurants->count() }}件)</span>
+                        🍜 店舗管理 <span class="text-sm font-normal text-gray-500">({{ $restaurants->total() }}件)</span>
                     </h3>
                     <div class="overflow-x-auto">
                         <table class="min-w-full text-left text-sm whitespace-nowrap">
@@ -105,6 +106,7 @@
                             </tbody>
                         </table>
                     </div>
+                    <div class="mt-4">{{ $restaurants->links() }}</div>
                 </div>
             </div>
 
@@ -112,7 +114,7 @@
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900">
                     <h3 class="text-lg font-bold mb-4 border-b pb-2 flex items-center gap-2">
-                        💬 レビュー管理 <span class="text-sm font-normal text-gray-500">({{ $reviews->count() }}件)</span>
+                        💬 レビュー管理 <span class="text-sm font-normal text-gray-500">({{ $reviews->total() }}件)</span>
                     </h3>
                     <div class="overflow-x-auto">
                         <table class="min-w-full text-left text-sm whitespace-nowrap">
@@ -145,6 +147,7 @@
                             </tbody>
                         </table>
                     </div>
+                    <div class="mt-4">{{ $reviews->links() }}</div>
                 </div>
             </div>
 

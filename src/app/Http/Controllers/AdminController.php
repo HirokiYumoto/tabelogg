@@ -15,10 +15,9 @@ class AdminController extends Controller
      */
     public function index()
     {
-        // 最新のデータを取得（必要に応じてページネーションに変更可）
-        $users = User::latest()->get();
-        $restaurants = Restaurant::with('user')->latest()->get();
-        $reviews = Review::with(['user', 'restaurant'])->latest()->get();
+        $users = User::latest()->paginate(30, ['*'], 'users_page');
+        $restaurants = Restaurant::with('user')->latest()->paginate(30, ['*'], 'restaurants_page');
+        $reviews = Review::with(['user', 'restaurant'])->latest()->paginate(30, ['*'], 'reviews_page');
 
         return view('admin.dashboard', compact('users', 'restaurants', 'reviews'));
     }

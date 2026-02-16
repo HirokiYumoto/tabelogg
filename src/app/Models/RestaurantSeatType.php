@@ -9,10 +9,11 @@ class RestaurantSeatType extends Model
 {
     use HasFactory;
 
-    // 保存を許可するカラム
     protected $fillable = [
         'restaurant_id',
         'name',
+        'type',
+        'seats_per_unit',
         'capacity',
     ];
 
@@ -26,5 +27,14 @@ class RestaurantSeatType extends Model
     public function reservations()
     {
         return $this->hasMany(Reservation::class);
+    }
+
+    // 表示名を自動生成
+    public static function generateName(string $type, int $seatsPerUnit, int $capacity): string
+    {
+        if ($type === 'counter') {
+            return "カウンター（{$capacity}席）";
+        }
+        return "{$seatsPerUnit}名テーブル（{$capacity}卓）";
     }
 }

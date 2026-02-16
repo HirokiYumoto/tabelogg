@@ -72,18 +72,25 @@
                                                     📍 {{ $myRestaurant->city->prefecture->name }} {{ $myRestaurant->city->name }}
                                                 </p>
                                                 
-                                                <div class="flex items-center gap-2 mt-3">
+                                                <div class="flex flex-wrap items-center gap-2 mt-3">
                                                     {{-- 確認ボタン --}}
-                                                    <a href="{{ route('restaurants.show', $myRestaurant->id) }}" class="text-xs bg-gray-800 text-white px-3 py-2 rounded hover:bg-gray-700 transition shadow-sm font-bold">
-                                                        確認する
+                                                    <a href="{{ route('restaurants.show', $myRestaurant->id) }}" class="text-xs whitespace-nowrap text-white px-3 py-1.5 rounded transition font-bold" style="background-color:#374151;">
+                                                        確認
                                                     </a>
-                                                    
+                                                    {{-- 編集ボタン --}}
+                                                    <a href="{{ route('restaurants.edit', $myRestaurant->id) }}" class="text-xs whitespace-nowrap text-white px-3 py-1.5 rounded transition font-bold" style="background-color:#f97316;">
+                                                        編集
+                                                    </a>
+                                                    {{-- 予約確認ボタン --}}
+                                                    <a href="{{ route('owner.dashboard', $myRestaurant->id) }}" class="text-xs whitespace-nowrap text-white px-3 py-1.5 rounded transition font-bold" style="background-color:#22c55e;">
+                                                        予約確認
+                                                    </a>
                                                     {{-- 削除ボタン --}}
                                                     <form action="{{ route('restaurants.destroy', $myRestaurant->id) }}" method="POST" onsubmit="return confirm('本当にこの店舗を削除しますか？\n削除すると元に戻せません。');" class="inline-block">
                                                         @csrf
                                                         @method('DELETE')
-                                                        <button type="submit" class="text-xs bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700 transition shadow-sm font-bold border border-red-700">
-                                                            削除する
+                                                        <button type="submit" class="text-xs whitespace-nowrap text-white px-3 py-1.5 rounded transition font-bold" style="background-color:#ef4444;">
+                                                            削除
                                                         </button>
                                                     </form>
                                                 </div>
@@ -98,9 +105,77 @@
                 @endif
             @endauth
 
+            {{-- ▼ 2. 予約履歴 ▼ --}}
+            @php
+                $myReservations = Auth::user()->reservations()->with(['restaurant', 'seatType'])->orderBy('reserved_at', 'desc')->get();
+                $upcomingReservations = $myReservations->where('reserved_at', '>=', now());
+                $pastReservations = $myReservations->where('reserved_at', '<', now());
+            @endphp
+            <div class="bg-white rounded-lg shadow-md overflow-hidden mb-8">
+                <div class="p-6 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
+                    <h3 class="font-bold text-lg text-gray-800">予約履歴</h3>
+                    <a href="{{ route('reservations.index') }}" class="text-sm text-orange-500 hover:underline font-bold">すべて見る</a>
+                </div>
+                <div class="p-6">
+                    @if($myReservations->isEmpty())
+                        <p class="text-gray-400 text-sm text-center py-4">まだ予約はありません。</p>
+                    @else
+                        {{-- 今後の予約 --}}
+                        @if($upcomingReservations->isNotEmpty())
+                            <h4 class="text-sm font-bold text-gray-700 mb-3 border-l-4 border-orange-500 pl-2">今後の予約</h4>
+                            <div class="space-y-3 mb-6">
+                                @foreach($upcomingReservations as $rv)
+                                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 border border-gray-200 rounded-lg">
+                                        <div>
+                                            <a href="{{ route('restaurants.show', $rv->restaurant_id) }}" class="font-bold text-orange-600 hover:underline">
+                                                {{ $rv->restaurant->name }}
+                                            </a>
+                                            <div class="text-xs text-gray-500 mt-1">
+                                                {{ $rv->reserved_at->format('Y/m/d (D) H:i') }} 〜 {{ $rv->end_at->format('H:i') }}
+                                                ・{{ $rv->seatType->name }}
+                                                ・{{ $rv->number_of_people }}名
+                                            </div>
+                                        </div>
+                                        <form action="{{ route('reservations.destroy', $rv->id) }}" method="POST" onsubmit="return confirm('この予約をキャンセルしますか？');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="text-xs text-red-500 hover:text-red-700 border border-red-300 hover:border-red-500 px-3 py-1.5 rounded-full font-bold transition">キャンセル</button>
+                                        </form>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
+
+                        {{-- 過去の予約（直近3件） --}}
+                        @if($pastReservations->isNotEmpty())
+                            <h4 class="text-sm font-bold text-gray-700 mb-3 border-l-4 border-gray-400 pl-2">過去の予約</h4>
+                            <div class="space-y-2">
+                                @foreach($pastReservations->take(3) as $rv)
+                                    <div class="p-3 bg-gray-50 rounded-lg opacity-70">
+                                        <a href="{{ route('restaurants.show', $rv->restaurant_id) }}" class="font-bold text-sm text-gray-700 hover:underline">
+                                            {{ $rv->restaurant->name }}
+                                        </a>
+                                        <div class="text-xs text-gray-500 mt-1">
+                                            {{ $rv->reserved_at->format('Y/m/d (D) H:i') }}
+                                            ・{{ $rv->seatType->name }}
+                                            ・{{ $rv->number_of_people }}名
+                                        </div>
+                                    </div>
+                                @endforeach
+                                @if($pastReservations->count() > 3)
+                                    <a href="{{ route('reservations.index') }}" class="block text-center text-xs text-gray-500 hover:text-orange-500 pt-2">
+                                        他 {{ $pastReservations->count() - 3 }}件の過去の予約を見る
+                                    </a>
+                                @endif
+                            </div>
+                        @endif
+                    @endif
+                </div>
+            </div>
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                
-                {{-- ▼ 2. お気に入り店舗一覧 ▼ --}}
+
+                {{-- ▼ 3. お気に入り店舗一覧 ▼ --}}
                 <div class="bg-white rounded-lg shadow-md h-full overflow-hidden">
                     <div class="p-6 bg-gray-50 border-b border-gray-100">
                         <h3 class="font-bold text-lg text-gray-800 flex items-center gap-2">
@@ -136,7 +211,7 @@
                     </div>
                 </div>
 
-                {{-- ▼ 3. 投稿したレビュー履歴 ▼ --}}
+                {{-- ▼ 4. 投稿したレビュー履歴 ▼ --}}
                 <div class="bg-white rounded-lg shadow-md h-full overflow-hidden">
                     <div class="p-6 bg-gray-50 border-b border-gray-100">
                         <h3 class="font-bold text-lg text-gray-800 flex items-center gap-2">

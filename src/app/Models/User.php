@@ -39,6 +39,12 @@ class User extends Authenticatable
         return $this->hasMany(Review::class);
     }
 
+    // ユーザーの予約データ
+    public function reservations()
+    {
+        return $this->hasMany(Reservation::class);
+    }
+
     // ユーザー自身が所有（作成）した店舗データ
     public function restaurants()
     {

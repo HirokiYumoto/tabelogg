@@ -20,6 +20,7 @@ class Restaurant extends Model
         'user_id',
         'latitude',  // ★追加
         'longitude', // ★追加
+        'max_party_size',
     ];
 
     // 店舗の所有者（ユーザー）へのリレーション

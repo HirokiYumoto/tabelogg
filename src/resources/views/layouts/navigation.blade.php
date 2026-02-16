@@ -17,6 +17,9 @@
                         <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                             ダッシュボード
                         </x-nav-link>
+                        <x-nav-link :href="route('reservations.index')" :active="request()->routeIs('reservations.index')">
+                            マイ予約
+                        </x-nav-link>
                     @endauth
                 </div>
             </div>
@@ -87,6 +90,9 @@
             @auth
                 <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                     ダッシュボード
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('reservations.index')" :active="request()->routeIs('reservations.index')">
+                    マイ予約
                 </x-responsive-nav-link>
             @endauth
         </div>

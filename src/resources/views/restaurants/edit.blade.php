@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            {{ __('新しいお店を登録') }}
+            {{ __('店舗情報を編集') }}
         </h2>
     </x-slot>
 
@@ -9,7 +9,7 @@
         <div class="max-w-3xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900">
-                    
+
                     {{-- エラー表示 --}}
                     @if ($errors->any())
                         <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
@@ -21,13 +21,14 @@
                         </div>
                     @endif
 
-                    <form action="{{ route('restaurants.store') }}" method="POST" enctype="multipart/form-data">
+                    <form action="{{ route('restaurants.update', $restaurant->id) }}" method="POST" enctype="multipart/form-data">
                         @csrf
-                        
+                        @method('PUT')
+
                         {{-- 店舗名 --}}
                         <div class="mb-6">
                             <label class="block text-gray-700 font-bold mb-2">店舗名 <span class="text-red-500">*</span></label>
-                            <input type="text" name="name" class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring-orange-500" placeholder="例：中華そば 太郎" required>
+                            <input type="text" name="name" value="{{ old('name', $restaurant->name) }}" class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring-orange-500" required>
                         </div>
 
                         {{-- エリア選択 --}}
@@ -37,36 +38,36 @@
                                 @foreach($prefectures as $prefecture)
                                     <optgroup label="{{ $prefecture->name }}">
                                         @foreach($prefecture->cities as $city)
-                                            <option value="{{ $city->id }}">{{ $city->name }}</option>
+                                            <option value="{{ $city->id }}" {{ old('city_id', $restaurant->city_id) == $city->id ? 'selected' : '' }}>{{ $city->name }}</option>
                                         @endforeach
                                     </optgroup>
                                 @endforeach
                             </select>
                         </div>
 
-                        {{-- ★★★ 追加：住所（必須） ★★★ --}}
+                        {{-- 住所 --}}
                         <div class="mb-6">
                             <label class="block text-gray-700 font-bold mb-2">住所詳細 <span class="text-red-500">*</span></label>
-                            <input type="text" name="address" class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring-orange-500" placeholder="例：1-2-3 ○○ビル1F" required>
+                            <input type="text" name="address" value="{{ old('address', $restaurant->address) }}" class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring-orange-500" required>
                             <p class="text-xs text-gray-500 mt-1">※市区町村以降の住所を入力してください</p>
                         </div>
 
                         {{-- 最寄駅 --}}
                         <div class="mb-6">
                             <label class="block text-gray-700 font-bold mb-2">最寄駅（任意）</label>
-                            <input type="text" name="nearest_station" class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring-orange-500" placeholder="例：JR新宿駅 東口徒歩5分">
+                            <input type="text" name="nearest_station" value="{{ old('nearest_station', $restaurant->nearest_station) }}" class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring-orange-500">
                         </div>
 
                         {{-- お店の紹介 --}}
                         <div class="mb-6">
                             <label class="block text-gray-700 font-bold mb-2">お店の紹介 <span class="text-red-500">*</span></label>
-                            <textarea name="description" rows="5" class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring-orange-500" placeholder="お店のこだわりや特徴を入力してください" required></textarea>
+                            <textarea name="description" rows="5" class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring-orange-500" required>{{ old('description', $restaurant->description) }}</textarea>
                         </div>
 
                         {{-- メニュー情報 --}}
                         <div class="mb-6">
                             <label class="block text-gray-700 font-bold mb-2">おすすめメニュー・価格など（任意）</label>
-                            <textarea name="menu_info" rows="4" class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring-orange-500" placeholder="例：&#13;&#10;特製醤油ラーメン 850円&#13;&#10;半チャーハン 300円"></textarea>
+                            <textarea name="menu_info" rows="4" class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring-orange-500">{{ old('menu_info', $restaurant->menu_info) }}</textarea>
                         </div>
 
                         {{-- 座席タイプ --}}
@@ -75,7 +76,7 @@
                             <p class="text-xs text-gray-500 mb-3">予約機能を利用する場合は、座席タイプを追加してください。</p>
 
                             <div id="seat-types-container">
-                                {{-- JavaScript で動的に追加される --}}
+                                {{-- JavaScript で既存データ + 動的に追加される --}}
                             </div>
 
                             <button type="button" onclick="addSeatType()" class="mt-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-full transition border border-gray-300">
@@ -86,7 +87,7 @@
                         {{-- 一予約あたりの最大人数 --}}
                         <div class="mb-6">
                             <label class="block text-gray-700 font-bold mb-2">一予約あたりの最大人数（任意）</label>
-                            <input type="number" name="max_party_size" min="1" value="{{ old('max_party_size') }}" class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring-orange-500" placeholder="例：8">
+                            <input type="number" name="max_party_size" min="1" value="{{ old('max_party_size', $restaurant->max_party_size) }}" class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring-orange-500" placeholder="例：8">
                             <p class="text-xs text-gray-500 mt-1">※未入力の場合は人数制限なしになります</p>
                         </div>
 
@@ -120,15 +121,31 @@
                             </div>
                         </div>
 
-                        {{-- 画像アップロード --}}
+                        {{-- 既存画像 --}}
+                        @if($restaurant->images->isNotEmpty())
+                            <div class="mb-4">
+                                <label class="block text-gray-700 font-bold mb-2">登録済み画像</label>
+                                {{-- TODO(human): 既存画像の表示・削除UIを実装 --}}
+                                <div class="flex flex-wrap gap-3">
+                                    @foreach($restaurant->images as $img)
+                                        <div class="w-24 h-24 rounded-lg overflow-hidden border border-gray-200 bg-gray-100">
+                                            <img src="{{ asset('storage/' . $img->image_path) }}" class="w-full h-full object-cover">
+                                        </div>
+                                    @endforeach
+                                </div>
+                                <p class="text-xs text-gray-500 mt-2">※画像の削除機能は現在準備中です</p>
+                            </div>
+                        @endif
+
+                        {{-- 画像追加アップロード --}}
                         <div class="mb-8">
-                            <label class="block text-gray-700 font-bold mb-2">店舗・メニュー画像（複数可）</label>
+                            <label class="block text-gray-700 font-bold mb-2">画像を追加（複数可）</label>
                             <input type="file" name="images[]" multiple class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-200 file:text-orange-800 hover:file:bg-orange-300 cursor-pointer">
                         </div>
 
                         <div class="flex justify-center gap-4">
-                            <a href="{{ route('dashboard') }}" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-full transition">キャンセル</a>
-                            <button type="submit" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-8 rounded-full shadow-lg transition">登録する</button>
+                            <a href="{{ route('restaurants.show', $restaurant->id) }}" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-6 rounded-full transition">キャンセル</a>
+                            <button type="submit" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-8 rounded-full shadow-lg transition">更新する</button>
                         </div>
 
                     </form>
@@ -140,7 +157,17 @@
         let seatTypeIndex = 0;
         const inputClass = 'w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring-orange-500';
 
-        function addSeatType() {
+        // 既存の座席タイプを初期表示
+        const existingSeatTypes = @json($restaurant->seatTypes);
+        existingSeatTypes.forEach(st => {
+            addSeatType(st.type, st.capacity, st.seats_per_unit);
+        });
+
+        function addSeatType(type, capacity, seatsPerUnit) {
+            type = type || '';
+            capacity = capacity || '';
+            seatsPerUnit = seatsPerUnit || '';
+
             const container = document.getElementById('seat-types-container');
             const card = document.createElement('div');
             card.className = 'border border-gray-200 rounded-lg p-4 mb-3 bg-gray-50';
@@ -156,19 +183,25 @@
                     <select name="seat_types[${idx}][type]" onchange="onSeatTypeChange(${idx})"
                         class="${inputClass}" required>
                         <option value="">種類を選択</option>
-                        <option value="counter">カウンター</option>
-                        <option value="table">テーブル</option>
+                        <option value="counter" ${type === 'counter' ? 'selected' : ''}>カウンター</option>
+                        <option value="table" ${type === 'table' ? 'selected' : ''}>テーブル</option>
                     </select>
                 </div>
                 <div id="seat-type-fields-${idx}"></div>
             `;
             container.appendChild(card);
             seatTypeIndex++;
+
+            // 既存データがあれば即座にフィールドを生成
+            if (type) {
+                onSeatTypeChange(idx, capacity, seatsPerUnit);
+            }
         }
 
-        function onSeatTypeChange(idx) {
+        function onSeatTypeChange(idx, capacity, seatsPerUnit) {
+            capacity = capacity || '';
+            seatsPerUnit = seatsPerUnit || '';
             const fieldsDiv = document.getElementById('seat-type-fields-' + idx);
-
             const row = document.getElementById('seat-type-row-' + idx);
             const type = row.querySelector('select[name="seat_types[' + idx + '][type]"]').value;
 
@@ -176,7 +209,7 @@
                 fieldsDiv.innerHTML = `
                     <label class="block text-sm text-gray-600 mb-1">カウンター席数（合計）</label>
                     <input type="number" name="seat_types[${idx}][capacity]" min="1"
-                        class="${inputClass}" placeholder="例：10" required>
+                        class="${inputClass}" placeholder="例：10" value="${capacity}" required>
                     <input type="hidden" name="seat_types[${idx}][seats_per_unit]" value="1">
                 `;
             } else if (type === 'table') {
@@ -185,12 +218,12 @@
                         <div>
                             <label class="block text-sm text-gray-600 mb-1">1卓あたりの席数</label>
                             <input type="number" name="seat_types[${idx}][seats_per_unit]" min="1"
-                                class="${inputClass}" placeholder="例：4" required>
+                                class="${inputClass}" placeholder="例：4" value="${seatsPerUnit}" required>
                         </div>
                         <div>
                             <label class="block text-sm text-gray-600 mb-1">テーブル数（卓数）</label>
                             <input type="number" name="seat_types[${idx}][capacity]" min="1"
-                                class="${inputClass}" placeholder="例：5" required>
+                                class="${inputClass}" placeholder="例：5" value="${capacity}" required>
                         </div>
                     </div>
                 `;
@@ -308,5 +341,27 @@
                 daySlotCounts[dayNum] = 0;
             }
         }
+
+        // 既存の営業時間データをロード
+        const existingTimeSettings = @json($restaurant->timeSettings);
+        const grouped = {};
+        existingTimeSettings.forEach(ts => {
+            const day = ts.day_of_week;
+            if (!grouped[day]) grouped[day] = [];
+            grouped[day].push(ts);
+        });
+        Object.keys(grouped).forEach(dayNum => {
+            const checkbox = document.querySelector('.js-day-toggle[data-day="' + dayNum + '"]');
+            if (checkbox) {
+                checkbox.checked = true;
+                document.getElementById('day-slots-' + dayNum).classList.remove('hidden');
+                document.getElementById('add-slot-btn-' + dayNum).classList.remove('hidden');
+            }
+            grouped[dayNum].forEach(ts => {
+                const start = ts.start_time ? ts.start_time.substring(0, 5) : '11:00';
+                const end = ts.end_time ? ts.end_time.substring(0, 5) : '21:00';
+                addTimeSlot(parseInt(dayNum), start, end, String(ts.stay_minutes));
+            });
+        });
     </script>
 </x-app-layout>
