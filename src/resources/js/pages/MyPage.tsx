@@ -344,6 +344,7 @@ function FavoritesSection({ favorites }: { favorites: DashboardFavorite[] }) {
 
 function ReviewsSection({ reviews }: { reviews: DashboardReview[] }) {
   const queryClient = useQueryClient();
+  const recentReviews = reviews.slice(0, 3);
 
   const deleteMutation = useMutation({
     mutationFn: ({ reviewId }: { reviewId: number; restaurantId: number }) => deleteReview(reviewId),
@@ -368,39 +369,49 @@ function ReviewsSection({ reviews }: { reviews: DashboardReview[] }) {
         {reviews.length === 0 ? (
           <p className="text-gray-400 text-sm text-center py-4">まだ投稿したレビューはありません。</p>
         ) : (
-          <ul className="space-y-6">
-            {reviews.map((review) => (
-              <li key={review.id} className="border-b border-gray-100 last:border-0 pb-4">
-                <div className="flex justify-between items-start mb-2">
-                  <Link
-                    to={`/restaurants/${review.restaurant.id}`}
-                    className="font-bold text-sm text-gray-800 hover:text-orange-500"
-                  >
-                    {review.restaurant.name}
-                  </Link>
-                  <span className="text-xs text-gray-400">
-                    {new Date(review.created_at).toLocaleDateString('ja-JP')}
-                  </span>
-                </div>
-                <div className="flex items-center text-xs text-yellow-500 mb-2">
-                  {stars(review.rating)}
-                </div>
-                <p className="text-sm text-gray-600 line-clamp-2 bg-gray-50 p-2 rounded mb-2">
-                  {review.comment}
-                </p>
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(review.id, review.restaurant.id)}
-                    disabled={deleteMutation.isPending}
-                    className="text-xs text-red-500 hover:text-red-700 hover:underline disabled:opacity-50"
-                  >
-                    削除する
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className="space-y-6">
+              {recentReviews.map((review) => (
+                <li key={review.id} className="border-b border-gray-100 last:border-0 pb-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <Link
+                      to={`/restaurants/${review.restaurant.id}`}
+                      className="font-bold text-sm text-gray-800 hover:text-orange-500"
+                    >
+                      {review.restaurant.name}
+                    </Link>
+                    <span className="text-xs text-gray-400">
+                      {new Date(review.created_at).toLocaleDateString('ja-JP')}
+                    </span>
+                  </div>
+                  <div className="flex items-center text-xs text-yellow-500 mb-2">
+                    {stars(review.rating)}
+                  </div>
+                  <p className="text-sm text-gray-600 bg-gray-50 p-2 rounded mb-2 whitespace-pre-wrap">
+                    {review.comment}
+                  </p>
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(review.id, review.restaurant.id)}
+                      disabled={deleteMutation.isPending}
+                      className="text-xs text-red-500 hover:text-red-700 hover:underline disabled:opacity-50"
+                    >
+                      削除する
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-4 text-center">
+              <Link
+                to="/mypage/reviews"
+                className="inline-block text-sm text-orange-500 hover:text-orange-600 font-bold border border-orange-500 hover:bg-orange-50 px-4 py-2 rounded-full transition"
+              >
+                過去の口コミ一覧
+              </Link>
+            </div>
+          </>
         )}
       </div>
     </div>

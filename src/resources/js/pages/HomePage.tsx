@@ -1,11 +1,10 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRestaurants } from '@/hooks/useRestaurants';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { getRestaurant } from '@/api/restaurants';
 import type { RestaurantSearchParams, Restaurant } from '@/types/restaurant';
-import Pagination from '@/components/ui/Pagination';
 import Spinner from '@/components/ui/Spinner';
 
 const SORT_OPTIONS = [
@@ -154,11 +153,11 @@ function RestaurantCard({ restaurant, onPrefetch }: { restaurant: Restaurant; on
 export default function HomePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   const keyword = searchParams.get('keyword') ?? '';
   const prefectureId = searchParams.get('prefecture_id') ?? '';
   const sort = searchParams.get('sort') ?? 'distance';
-  const page = Number(searchParams.get('page') ?? '1');
 
   const { lat, lng, loading: geoLoading, error: geoError, requestLocation } = useGeolocation();
 
@@ -180,12 +179,11 @@ export default function HomePage() {
     }
   }, [sort, lat, lng, geoLoading, requestLocation]);
 
-  // Build query params
+  // Build query params (no page — handled by infinite query)
   const queryParams: RestaurantSearchParams = {
     keyword: keyword || undefined,
     prefecture_id: prefectureId || undefined,
     sort,
-    page,
   };
 
   if (sort === 'distance' && lat != null && lng != null) {
@@ -193,13 +191,42 @@ export default function HomePage() {
     queryParams.lng = String(Math.round(lng * 10000) / 10000);
   }
 
-  const { data, isLoading, isError } = useRestaurants(queryParams);
+  const {
+    data,
+    isLoading,
+    isError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useRestaurants(queryParams);
 
-  const restaurants = data?.data ?? [];
-  const meta = data?.meta;
+  const restaurants = data?.pages.flatMap((page) => page.data) ?? [];
+  const totalCount = data?.pages[0]?.meta?.total;
 
   const hasSearchFilter = keyword || prefectureId;
-  const totalCount = data?.meta?.total;
+
+  // IntersectionObserver for infinite scroll
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { rootMargin: '200px' },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  // Scroll to top when filters/sort change
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [keyword, prefectureId, sort]);
 
   const updateParam = useCallback(
     (key: string, value: string) => {
@@ -210,10 +237,8 @@ export default function HomePage() {
         } else {
           next.delete(key);
         }
-        // Reset page when filters change
-        if (key !== 'page') {
-          next.delete('page');
-        }
+        // Remove page param (no longer used)
+        next.delete('page');
         return next;
       });
     },
@@ -253,7 +278,7 @@ export default function HomePage() {
         </p>
       )}
 
-      {/* Loading */}
+      {/* Loading (initial) */}
       {isLoading && <Spinner className="py-20" />}
 
       {/* Error */}
@@ -279,13 +304,17 @@ export default function HomePage() {
             ))}
           </div>
 
-          {/* Pagination */}
-          {meta && (
-            <Pagination
-              currentPage={meta.current_page}
-              lastPage={meta.last_page}
-              onPageChange={(p) => updateParam('page', String(p))}
-            />
+          {/* Sentinel for infinite scroll */}
+          <div ref={sentinelRef} className="h-1" />
+
+          {/* Loading more */}
+          {isFetchingNextPage && <Spinner className="py-8" />}
+
+          {/* All loaded */}
+          {!hasNextPage && (
+            <p className="text-center text-sm text-gray-400 py-8">
+              すべての店舗を表示しました
+            </p>
           )}
         </>
       )}

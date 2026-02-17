@@ -10,6 +10,29 @@ use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
 {
+    public function userReviews(Request $request)
+    {
+        $user = Auth::user();
+
+        $reviews = $user->reviews()
+            ->with('restaurant')
+            ->orderByDesc('created_at')
+            ->paginate(10);
+
+        $reviews->getCollection()->transform(fn($r) => [
+            'id' => $r->id,
+            'restaurant' => $r->restaurant ? [
+                'id' => $r->restaurant->id,
+                'name' => $r->restaurant->name,
+            ] : null,
+            'rating' => $r->rating,
+            'comment' => $r->comment,
+            'created_at' => $r->created_at->toISOString(),
+        ]);
+
+        return response()->json($reviews);
+    }
+
     public function index(Request $request)
     {
         $user = Auth::user();

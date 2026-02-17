@@ -1,4 +1,5 @@
 import apiClient from './client';
+import type { PaginatedResponse } from './restaurants';
 
 export interface DashboardReservation {
   id: number;
@@ -50,5 +51,10 @@ export interface DashboardData {
 
 export async function getDashboard(): Promise<DashboardData> {
   const { data } = await apiClient.get('/dashboard');
+  return data;
+}
+
+export async function getUserReviews(page: number): Promise<PaginatedResponse<DashboardReview>> {
+  const { data } = await apiClient.get('/user/reviews', { params: { page } });
   return data;
 }
