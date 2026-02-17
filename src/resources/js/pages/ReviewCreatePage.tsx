@@ -23,6 +23,8 @@ export default function ReviewCreatePage() {
     mutationFn: (formData: FormData) => storeReview(restaurantId, formData),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['restaurant', restaurantId] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['restaurants'] });
       navigate(`/restaurants/${restaurantId}`, { replace: true });
     },
   });

@@ -7,10 +7,14 @@ interface GeolocationState {
   error: string | null;
 }
 
+// Persist coordinates across component unmount/remount
+let cachedLat: number | null = null;
+let cachedLng: number | null = null;
+
 export function useGeolocation() {
   const [state, setState] = useState<GeolocationState>({
-    lat: null,
-    lng: null,
+    lat: cachedLat,
+    lng: cachedLng,
     loading: false,
     error: null,
   });
@@ -25,9 +29,11 @@ export function useGeolocation() {
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        cachedLat = position.coords.latitude;
+        cachedLng = position.coords.longitude;
         setState({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
+          lat: cachedLat,
+          lng: cachedLng,
           loading: false,
           error: null,
         });

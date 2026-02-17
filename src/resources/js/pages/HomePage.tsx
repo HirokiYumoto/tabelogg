@@ -189,8 +189,8 @@ export default function HomePage() {
   };
 
   if (sort === 'distance' && lat != null && lng != null) {
-    queryParams.lat = String(lat);
-    queryParams.lng = String(lng);
+    queryParams.lat = String(Math.round(lat * 10000) / 10000);
+    queryParams.lng = String(Math.round(lng * 10000) / 10000);
   }
 
   const { data, isLoading, isError } = useRestaurants(queryParams);

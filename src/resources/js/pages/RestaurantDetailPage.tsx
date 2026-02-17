@@ -5,6 +5,7 @@ import { useRestaurant } from '@/hooks/useRestaurants';
 import { useAuth } from '@/contexts/AuthContext';
 import { addFavorite, removeFavorite } from '@/api/favorites';
 import { deleteReview } from '@/api/reviews';
+import type { DashboardData } from '@/api/dashboard';
 import type { RestaurantDetail } from '@/types/restaurant';
 import StarRating from '@/components/ui/StarRating';
 import Spinner from '@/components/ui/Spinner';
@@ -36,6 +37,36 @@ function TopTab({ restaurant }: { restaurant: RestaurantDetail }) {
         : addFavorite(restaurant.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['restaurant', restaurant.id] });
+
+      // Optimistically update dashboard cache so MyPage reflects the change immediately
+      queryClient.setQueryData<DashboardData>(['dashboard'], (old) => {
+        if (!old) return old;
+        if (restaurant.is_favorited) {
+          // Was favorited → now removed
+          return {
+            ...old,
+            favorites: old.favorites.filter((f) => f.restaurant.id !== restaurant.id),
+          };
+        }
+        // Was not favorited → now added
+        return {
+          ...old,
+          favorites: [
+            ...old.favorites,
+            {
+              id: Date.now(), // Temporary id; replaced on next server fetch
+              restaurant: {
+                id: restaurant.id,
+                name: restaurant.name,
+                city: restaurant.city
+                  ? { name: restaurant.city.name, prefecture: restaurant.city.prefecture ?? null }
+                  : null,
+              },
+            },
+          ],
+        };
+      });
+      queryClient.invalidateQueries({ queryKey: ['restaurants'] });
     },
   });
 
@@ -194,6 +225,8 @@ function ReviewsTab({ restaurant }: { restaurant: RestaurantDetail }) {
     mutationFn: (reviewId: number) => deleteReview(reviewId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['restaurant', restaurant.id] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['restaurants'] });
     },
   });
 
@@ -399,6 +432,11 @@ export default function RestaurantDetailPage() {
   const { id } = useParams<{ id: string }>();
   const restaurantId = Number(id);
   const [activeTab, setActiveTab] = useState<TabKey>('top');
+  const [accessMounted, setAccessMounted] = useState(false);
+
+  if (activeTab === 'access' && !accessMounted) {
+    setAccessMounted(true);
+  }
 
   const { data: restaurant, isLoading, isError } = useRestaurant(restaurantId);
 
@@ -458,7 +496,11 @@ export default function RestaurantDetailPage() {
       {activeTab === 'top' && <TopTab restaurant={restaurant} />}
       {activeTab === 'menu' && <MenuTab restaurant={restaurant} />}
       {activeTab === 'reviews' && <ReviewsTab restaurant={restaurant} />}
-      {activeTab === 'access' && <AccessTab restaurant={restaurant} />}
+      {accessMounted && (
+        <div style={{ display: activeTab === 'access' ? undefined : 'none' }}>
+          <AccessTab restaurant={restaurant} />
+        </div>
+      )}
       {activeTab === 'reservation' && <ReservationTab restaurant={restaurant} />}
     </div>
   );

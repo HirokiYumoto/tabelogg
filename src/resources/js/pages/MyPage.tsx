@@ -282,8 +282,10 @@ function FavoritesSection({ favorites }: { favorites: DashboardFavorite[] }) {
 
   const removeMutation = useMutation({
     mutationFn: (restaurantId: number) => removeFavorite(restaurantId),
-    onSuccess: () => {
+    onSuccess: (_data, restaurantId) => {
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['restaurant', restaurantId] });
+      queryClient.invalidateQueries({ queryKey: ['restaurants'] });
     },
   });
 
@@ -344,15 +346,17 @@ function ReviewsSection({ reviews }: { reviews: DashboardReview[] }) {
   const queryClient = useQueryClient();
 
   const deleteMutation = useMutation({
-    mutationFn: deleteReview,
-    onSuccess: () => {
+    mutationFn: ({ reviewId }: { reviewId: number; restaurantId: number }) => deleteReview(reviewId),
+    onSuccess: (_data, { restaurantId }) => {
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['restaurant', restaurantId] });
+      queryClient.invalidateQueries({ queryKey: ['restaurants'] });
     },
   });
 
-  const handleDelete = (reviewId: number) => {
+  const handleDelete = (reviewId: number, restaurantId: number) => {
     if (!window.confirm('本当にこのレビューを削除しますか？')) return;
-    deleteMutation.mutate(reviewId);
+    deleteMutation.mutate({ reviewId, restaurantId });
   };
 
   return (
@@ -387,7 +391,7 @@ function ReviewsSection({ reviews }: { reviews: DashboardReview[] }) {
                 <div className="flex justify-end">
                   <button
                     type="button"
-                    onClick={() => handleDelete(review.id)}
+                    onClick={() => handleDelete(review.id, review.restaurant.id)}
                     disabled={deleteMutation.isPending}
                     className="text-xs text-red-500 hover:text-red-700 hover:underline disabled:opacity-50"
                   >
