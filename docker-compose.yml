@@ -1,6 +1,8 @@
 services:
   app:
     build: ./infra/php
+    ports:
+      - 5173:5173
     volumes:
       - ./src:/data
   web:
@@ -20,7 +22,15 @@ services:
     ports:
       - 3306:3306
 
-  # ★★★ ここを追加します ★★★
+  queue:
+    build: ./infra/php
+    volumes:
+      - ./src:/data
+    command: php /data/artisan queue:work --sleep=3 --tries=3 --timeout=180
+    depends_on:
+      - db
+    restart: unless-stopped
+
   meilisearch:
     image: getmeili/meilisearch:v1.13
     ports:

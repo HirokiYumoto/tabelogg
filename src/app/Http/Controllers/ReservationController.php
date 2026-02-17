@@ -243,10 +243,10 @@ class ReservationController extends Controller
 
         $restaurant->load(['seatTypes', 'timeSettings']);
 
-        $seats = $this->availability->getAvailableSeats(
+        $result = $this->availability->getAvailableSeats(
             $restaurant, (int) $request->people, $request->date, $request->time
         );
 
-        return response()->json(['seats' => $seats]);
+        return response()->json($result);
     }
 }

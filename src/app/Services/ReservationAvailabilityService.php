@@ -254,6 +254,7 @@ class ReservationAvailabilityService
             ->where('end_at', '>', $startDT)
             ->get(['restaurant_seat_type_id', 'number_of_people']);
 
+        $stayMinutes = $setting->stay_minutes;
         $result = [];
 
         // カウンター判定
@@ -293,7 +294,7 @@ class ReservationAvailabilityService
             }
         }
 
-        return $result;
+        return ['seats' => $result, 'stay_minutes' => $stayMinutes];
     }
 
     /**

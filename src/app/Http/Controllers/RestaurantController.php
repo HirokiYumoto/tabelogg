@@ -30,17 +30,22 @@ class RestaurantController extends Controller
             ->withCount('reviews')          // reviews_count
             ->withCount('favorites');       // favorites_count
 
-     // 1. キーワード検索（Meilisearch利用）
+     // 1. キーワード検索（LIKE による部分一致）
         if ($request->filled('keyword')) {
-            // キーワードを " " で囲んでフレーズ検索（完全一致）にします
-            // これにより「高鼻」で「高島」がヒットするような誤検知を防ぎます
-            $keyword = '"' . $request->keyword . '"';
-
-            // Meilisearchで検索し、ヒットしたIDを取得
-            $searchResultIds = Restaurant::search($keyword)->keys();
-            
-            // ヒットしたIDの店舗だけに絞り込む
-            $query->whereIn('id', $searchResultIds);
+            $keyword = $request->keyword;
+            $query->where(function ($q) use ($keyword) {
+                $q->where('name', 'like', "%{$keyword}%")
+                  ->orWhere('description', 'like', "%{$keyword}%")
+                  ->orWhere('menu_info', 'like', "%{$keyword}%")
+                  ->orWhere('nearest_station', 'like', "%{$keyword}%")
+                  ->orWhere('address', 'like', "%{$keyword}%")
+                  ->orWhereHas('city', function ($cq) use ($keyword) {
+                      $cq->where('name', 'like', "%{$keyword}%")
+                         ->orWhereHas('prefecture', function ($pq) use ($keyword) {
+                             $pq->where('name', 'like', "%{$keyword}%");
+                         });
+                  });
+            });
         }
 
         // 2. エリア選択（プルダウン）による絞り込み
@@ -119,7 +124,11 @@ class RestaurantController extends Controller
             ? $restaurant->favorites()->where('user_id', Auth::id())->exists()
             : false;
 
-        return view('restaurants.show', compact('restaurant', 'isFavorited'));
+        $hasReviewed = Auth::check()
+            ? $restaurant->reviews()->where('user_id', Auth::id())->exists()
+            : false;
+
+        return view('restaurants.show', compact('restaurant', 'isFavorited', 'hasReviewed'));
     }
 
     /**

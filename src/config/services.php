@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'ollama' => [
+        'host' => env('OLLAMA_HOST', 'http://host.docker.internal:11434'),
+        'model' => env('OLLAMA_MODEL', 'qwen2.5:7b'),
+    ],
+
 ];
