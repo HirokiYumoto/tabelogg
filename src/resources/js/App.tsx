@@ -23,6 +23,7 @@ import AdminDashboardPage from '@/pages/AdminDashboardPage';
 import MyPage from '@/pages/MyPage';
 import ReviewCreatePage from '@/pages/ReviewCreatePage';
 import MyReviewsPage from '@/pages/MyReviewsPage';
+import MyRestaurantsPage from '@/pages/MyRestaurantsPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 
 const queryClient = new QueryClient({
@@ -63,6 +64,7 @@ function App() {
               <Route element={<AuthGuard />}>
                 <Route path="/mypage" element={<MyPage />} />
                 <Route path="/mypage/reviews" element={<MyReviewsPage />} />
+                <Route path="/mypage/restaurants" element={<MyRestaurantsPage />} />
                 <Route path="/reservations" element={<ReservationsPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/restaurants/:id/reviews/create" element={<ReviewCreatePage />} />

@@ -47,6 +47,7 @@ export interface DashboardData {
   favorites: DashboardFavorite[];
   reviews: DashboardReview[];
   owned_restaurants?: OwnedRestaurant[];
+  owned_restaurants_total?: number;
 }
 
 export async function getDashboard(): Promise<DashboardData> {
@@ -58,5 +59,12 @@ export async function getUserReviews(cursor?: string): Promise<CursorPaginatedRe
   const params: Record<string, string> = {};
   if (cursor) params.cursor = cursor;
   const { data } = await apiClient.get('/user/reviews', { params });
+  return data;
+}
+
+export async function getOwnedRestaurants(cursor?: string): Promise<CursorPaginatedResponse<OwnedRestaurant>> {
+  const params: Record<string, string> = {};
+  if (cursor) params.cursor = cursor;
+  const { data } = await apiClient.get('/user/restaurants', { params });
   return data;
 }

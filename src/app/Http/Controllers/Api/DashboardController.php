@@ -34,6 +34,60 @@ class DashboardController extends Controller
         return response()->json($reviews);
     }
 
+    public function ownedRestaurants(Request $request)
+    {
+        $user = Auth::user();
+        $perPage = 12;
+
+        $query = $user->restaurants()
+            ->with(['images', 'city.prefecture'])
+            ->latest()
+            ->orderByDesc('id');
+
+        // Cursor pagination
+        $cursor = $request->input('cursor');
+        if ($cursor) {
+            $decoded = json_decode(base64_decode($cursor), true);
+            if ($decoded && isset($decoded['id'])) {
+                $query->where(function ($q) use ($decoded) {
+                    $q->where('created_at', '<', $decoded['v'])
+                      ->orWhere(function ($q2) use ($decoded) {
+                          $q2->where('created_at', '=', $decoded['v'])
+                             ->where('id', '<', $decoded['id']);
+                      });
+                });
+            }
+        }
+
+        $results = $query->limit($perPage + 1)->get();
+        $hasMore = $results->count() > $perPage;
+        $items = $hasMore ? $results->take($perPage) : $results;
+
+        $nextCursor = null;
+        if ($hasMore && $items->isNotEmpty()) {
+            $last = $items->last();
+            $nextCursor = base64_encode(json_encode([
+                'v' => $last->created_at->toISOString(),
+                'id' => $last->id,
+            ]));
+        }
+
+        return response()->json([
+            'data' => $items->map(fn($r) => [
+                'id' => $r->id,
+                'name' => $r->name,
+                'image' => $r->images->first() ? '/storage/' . $r->images->first()->image_path : null,
+                'city' => $r->city ? [
+                    'name' => $r->city->name,
+                    'prefecture' => $r->city->prefecture ? [
+                        'name' => $r->city->prefecture->name,
+                    ] : null,
+                ] : null,
+            ]),
+            'next_cursor' => $nextCursor,
+        ]);
+    }
+
     public function index(Request $request)
     {
         $user = Auth::user();
@@ -132,11 +186,12 @@ class DashboardController extends Controller
             'reviews' => $reviews,
         ];
 
-        // Owner: owned restaurants
+        // Owner: owned restaurants (latest 4 + total count)
         if ($user->isStoreOwner()) {
             $result['owned_restaurants'] = $user->restaurants()
                 ->with(['images', 'city.prefecture'])
                 ->latest()
+                ->limit(4)
                 ->get()
                 ->map(fn($r) => [
                     'id' => $r->id,
@@ -149,6 +204,7 @@ class DashboardController extends Controller
                         ] : null,
                     ] : null,
                 ]);
+            $result['owned_restaurants_total'] = $user->restaurants()->count();
         }
 
         return response()->json($result);

@@ -67,6 +67,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Dashboard (マイページ)
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/user/reviews', [DashboardController::class, 'userReviews']);
+    Route::get('/user/restaurants', [DashboardController::class, 'ownedRestaurants']);
 
     // Profile
     Route::get('/profile', [ProfileController::class, 'show']);

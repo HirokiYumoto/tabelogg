@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use App\Models\RestaurantTimeSetting;
 use Illuminate\Support\Facades\Http;
+use App\Services\MeCabService;
 
 class RestaurantController extends Controller
 {
@@ -30,22 +31,22 @@ class RestaurantController extends Controller
             ->withCount('reviews')          // reviews_count
             ->withCount('favorites');       // favorites_count
 
-     // 1. キーワード検索（LIKE による部分一致）
+     // 1. キーワード検索（Meilisearch ハイブリッド + LIKE フォールバック）
         if ($request->filled('keyword')) {
             $keyword = $request->keyword;
-            $query->where(function ($q) use ($keyword) {
-                $q->where('name', 'like', "%{$keyword}%")
-                  ->orWhere('description', 'like', "%{$keyword}%")
-                  ->orWhere('menu_info', 'like', "%{$keyword}%")
-                  ->orWhere('nearest_station', 'like', "%{$keyword}%")
-                  ->orWhere('address', 'like', "%{$keyword}%")
-                  ->orWhereHas('city', function ($cq) use ($keyword) {
-                      $cq->where('name', 'like', "%{$keyword}%")
-                         ->orWhereHas('prefecture', function ($pq) use ($keyword) {
-                             $pq->where('name', 'like', "%{$keyword}%");
-                         });
-                  });
-            });
+            try {
+                $mecab = app(MeCabService::class);
+                $normalized = $mecab->normalize($keyword);
+                $searchTerm = $normalized !== $keyword ? "{$keyword} {$normalized}" : $keyword;
+                $ids = Restaurant::search($searchTerm)->take(10000)->keys()->toArray();
+                if (!empty($ids)) {
+                    $query->whereIn('restaurants.id', $ids);
+                } else {
+                    $this->applyLikeSearch($query, $keyword);
+                }
+            } catch (\Exception $e) {
+                $this->applyLikeSearch($query, $keyword);
+            }
         }
 
         // 2. エリア選択（プルダウン）による絞り込み
@@ -396,6 +397,23 @@ class RestaurantController extends Controller
         }
 
         return redirect()->route('restaurants.show', $restaurant->id)->with('success_update', '店舗情報を更新しました！');
+    }
+
+    private function applyLikeSearch($query, string $keyword): void
+    {
+        $query->where(function ($q) use ($keyword) {
+            $q->where('name', 'like', "%{$keyword}%")
+              ->orWhere('description', 'like', "%{$keyword}%")
+              ->orWhere('menu_info', 'like', "%{$keyword}%")
+              ->orWhere('nearest_station', 'like', "%{$keyword}%")
+              ->orWhere('address', 'like', "%{$keyword}%")
+              ->orWhereHas('city', function ($cq) use ($keyword) {
+                  $cq->where('name', 'like', "%{$keyword}%")
+                     ->orWhereHas('prefecture', function ($pq) use ($keyword) {
+                         $pq->where('name', 'like', "%{$keyword}%");
+                     });
+              });
+        });
     }
 
     /**

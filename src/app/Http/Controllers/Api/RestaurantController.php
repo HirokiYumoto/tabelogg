@@ -7,6 +7,7 @@ use App\Http\Resources\RestaurantResource;
 use App\Http\Resources\RestaurantDetailResource;
 use App\Models\Restaurant;
 use App\Models\City;
+use App\Services\MeCabService;
 use Illuminate\Http\Request;
 
 class RestaurantController extends Controller
@@ -20,22 +21,22 @@ class RestaurantController extends Controller
             ->withCount('reviews')
             ->withCount('favorites');
 
-        // Keyword search
+        // Keyword search (Meilisearch hybrid with LIKE fallback)
         if ($request->filled('keyword')) {
             $keyword = $request->keyword;
-            $query->where(function ($q) use ($keyword) {
-                $q->where('name', 'like', "%{$keyword}%")
-                  ->orWhere('description', 'like', "%{$keyword}%")
-                  ->orWhere('menu_info', 'like', "%{$keyword}%")
-                  ->orWhere('nearest_station', 'like', "%{$keyword}%")
-                  ->orWhere('address', 'like', "%{$keyword}%")
-                  ->orWhereHas('city', function ($cq) use ($keyword) {
-                      $cq->where('name', 'like', "%{$keyword}%")
-                         ->orWhereHas('prefecture', function ($pq) use ($keyword) {
-                             $pq->where('name', 'like', "%{$keyword}%");
-                         });
-                  });
-            });
+            try {
+                $mecab = app(MeCabService::class);
+                $normalized = $mecab->normalize($keyword);
+                $searchTerm = $normalized !== $keyword ? "{$keyword} {$normalized}" : $keyword;
+                $ids = Restaurant::search($searchTerm)->take(10000)->keys()->toArray();
+                if (!empty($ids)) {
+                    $query->whereIn('restaurants.id', $ids);
+                } else {
+                    $this->applyLikeSearch($query, $keyword);
+                }
+            } catch (\Exception $e) {
+                $this->applyLikeSearch($query, $keyword);
+            }
         }
 
         // Prefecture filter
@@ -168,6 +169,23 @@ class RestaurantController extends Controller
                 );
                 break;
         }
+    }
+
+    private function applyLikeSearch($query, string $keyword): void
+    {
+        $query->where(function ($q) use ($keyword) {
+            $q->where('name', 'like', "%{$keyword}%")
+              ->orWhere('description', 'like', "%{$keyword}%")
+              ->orWhere('menu_info', 'like', "%{$keyword}%")
+              ->orWhere('nearest_station', 'like', "%{$keyword}%")
+              ->orWhere('address', 'like', "%{$keyword}%")
+              ->orWhereHas('city', function ($cq) use ($keyword) {
+                  $cq->where('name', 'like', "%{$keyword}%")
+                     ->orWhereHas('prefecture', function ($pq) use ($keyword) {
+                         $pq->where('name', 'like', "%{$keyword}%");
+                     });
+              });
+        });
     }
 
     public function show($id)

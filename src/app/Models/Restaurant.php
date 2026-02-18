@@ -12,14 +12,18 @@ class Restaurant extends Model
 
     protected $fillable = [
         'name',
+        'name_reading',
         'description',
+        'description_reading',
         'menu_info',
+        'menu_info_reading',
         'nearest_station',
+        'nearest_station_reading',
         'city_id',
         'address',
         'user_id',
-        'latitude',  // ★追加
-        'longitude', // ★追加
+        'latitude',
+        'longitude',
         'max_party_size',
         'postal_code',
         'review_summary',
@@ -66,16 +70,16 @@ class Restaurant extends Model
      */
     public function toSearchableArray()
     {
-        // 基本のデータ（id, name, descriptionなど）を取得
         $array = $this->toArray();
 
-        // ★ここで住所やエリア名を追加します
-        // これにより、Meilisearchが「新宿」や「東京都」でもヒットさせるようになります
         $array['city_name'] = $this->city->name ?? '';
         $array['prefecture_name'] = $this->city->prefecture->name ?? '';
-        
-        // address（番地）は元々 $this->toArray() に含まれていますが、
-        // 念のため検索対象として意識しておきます。
+
+        // ひらがな読みフィールド（表記ゆれ吸収用）
+        $array['name_reading'] = $this->name_reading ?? '';
+        $array['description_reading'] = $this->description_reading ?? '';
+        $array['menu_info_reading'] = $this->menu_info_reading ?? '';
+        $array['nearest_station_reading'] = $this->nearest_station_reading ?? '';
 
         return $array;
     }

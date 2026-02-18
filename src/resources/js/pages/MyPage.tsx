@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
@@ -96,11 +95,8 @@ function RestaurantCard({ r, onDestroy, destroying }: { r: OwnedRestaurant; onDe
   );
 }
 
-const INITIAL_DISPLAY_COUNT = 4;
-
-function OwnerRestaurantsSection({ restaurants }: { restaurants: OwnedRestaurant[] }) {
+function OwnerRestaurantsSection({ restaurants, total }: { restaurants: OwnedRestaurant[]; total: number }) {
   const queryClient = useQueryClient();
-  const [showAll, setShowAll] = useState(false);
 
   const destroyMutation = useMutation({
     mutationFn: deleteRestaurant,
@@ -114,9 +110,6 @@ function OwnerRestaurantsSection({ restaurants }: { restaurants: OwnedRestaurant
     if (!window.confirm(`「${name}」を削除しますか？この操作は取り消せません。`)) return;
     destroyMutation.mutate(id);
   };
-
-  const hasMore = restaurants.length > INITIAL_DISPLAY_COUNT;
-  const displayed = showAll ? restaurants : restaurants.slice(0, INITIAL_DISPLAY_COUNT);
 
   return (
     <>
@@ -140,8 +133,8 @@ function OwnerRestaurantsSection({ restaurants }: { restaurants: OwnedRestaurant
       <div className="bg-white rounded-lg shadow-md overflow-hidden mb-8">
         <div className="p-6 bg-orange-50 border-b border-orange-100 flex justify-between items-center">
           <h3 className="font-bold text-lg text-orange-800">あなたの掲載店舗管理</h3>
-          {restaurants.length > 0 && (
-            <span className="text-sm text-orange-600 font-medium">{restaurants.length}件</span>
+          {total > 0 && (
+            <span className="text-sm text-orange-600 font-medium">{total}件</span>
           )}
         </div>
         <div className="p-6">
@@ -150,7 +143,7 @@ function OwnerRestaurantsSection({ restaurants }: { restaurants: OwnedRestaurant
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {displayed.map((r) => (
+                {restaurants.map((r) => (
                   <RestaurantCard
                     key={r.id}
                     r={r}
@@ -159,15 +152,14 @@ function OwnerRestaurantsSection({ restaurants }: { restaurants: OwnedRestaurant
                   />
                 ))}
               </div>
-              {hasMore && (
+              {total > restaurants.length && (
                 <div className="mt-6 text-center">
-                  <button
-                    type="button"
-                    onClick={() => setShowAll(!showAll)}
+                  <Link
+                    to="/mypage/restaurants"
                     className="inline-block text-sm text-orange-500 hover:text-orange-600 font-bold border border-orange-500 hover:bg-orange-50 px-6 py-2 rounded-full transition"
                   >
-                    {showAll ? '閉じる' : `全て見る（残り${restaurants.length - INITIAL_DISPLAY_COUNT}件）`}
-                  </button>
+                    すべての掲載店舗を見る（{total}件）
+                  </Link>
                 </div>
               )}
             </>
@@ -495,7 +487,7 @@ export default function MyPage() {
 
       {/* Owner: restaurant management */}
       {isOwner && data.owned_restaurants && (
-        <OwnerRestaurantsSection restaurants={data.owned_restaurants} />
+        <OwnerRestaurantsSection restaurants={data.owned_restaurants} total={data.owned_restaurants_total ?? data.owned_restaurants.length} />
       )}
 
       {/* Reservations */}
