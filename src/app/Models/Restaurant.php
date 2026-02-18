@@ -21,6 +21,7 @@ class Restaurant extends Model
         'latitude',  // ★追加
         'longitude', // ★追加
         'max_party_size',
+        'postal_code',
         'review_summary',
     ];
 

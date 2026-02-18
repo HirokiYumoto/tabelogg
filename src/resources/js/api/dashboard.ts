@@ -1,5 +1,5 @@
 import apiClient from './client';
-import type { PaginatedResponse } from './restaurants';
+import type { CursorPaginatedResponse } from './restaurants';
 
 export interface DashboardReservation {
   id: number;
@@ -54,7 +54,9 @@ export async function getDashboard(): Promise<DashboardData> {
   return data;
 }
 
-export async function getUserReviews(page: number): Promise<PaginatedResponse<DashboardReview>> {
-  const { data } = await apiClient.get('/user/reviews', { params: { page } });
+export async function getUserReviews(cursor?: string): Promise<CursorPaginatedResponse<DashboardReview>> {
+  const params: Record<string, string> = {};
+  if (cursor) params.cursor = cursor;
+  const { data } = await apiClient.get('/user/reviews', { params });
   return data;
 }

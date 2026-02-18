@@ -17,7 +17,8 @@ class DashboardController extends Controller
         $reviews = $user->reviews()
             ->with('restaurant')
             ->orderByDesc('created_at')
-            ->paginate(10);
+            ->orderByDesc('id')
+            ->cursorPaginate(10);
 
         $reviews->getCollection()->transform(fn($r) => [
             'id' => $r->id,

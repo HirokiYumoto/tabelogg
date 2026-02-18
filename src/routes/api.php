@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\RestaurantManageController;
 use App\Http\Controllers\Api\OwnerController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\CityController;
 
 /*
 |--------------------------------------------------------------------------
@@ -21,6 +22,7 @@ use App\Http\Controllers\Api\DashboardController;
 Route::get('/restaurants', [RestaurantController::class, 'index']);
 Route::get('/restaurants/{id}', [RestaurantController::class, 'show']);
 Route::get('/prefectures', [PrefectureController::class, 'index']);
+Route::get('/cities', [CityController::class, 'index']);
 
 /*
 |--------------------------------------------------------------------------
@@ -57,6 +59,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/restaurants/{restaurant}/reservations/available-dates', [ReservationController::class, 'availableDates']);
     Route::get('/restaurants/{restaurant}/reservations/available-times', [ReservationController::class, 'availableTimes']);
     Route::get('/restaurants/{restaurant}/reservations/available-seats', [ReservationController::class, 'availableSeats']);
+
+    // Cities
+    Route::post('/cities/resolve', [CityController::class, 'resolve']);
 
     // Dashboard (マイページ)
     Route::get('/dashboard', [DashboardController::class, 'index']);

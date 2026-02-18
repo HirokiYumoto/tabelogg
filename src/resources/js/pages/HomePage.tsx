@@ -157,6 +157,7 @@ export default function HomePage() {
 
   const keyword = searchParams.get('keyword') ?? '';
   const prefectureId = searchParams.get('prefecture_id') ?? '';
+  const cityId = searchParams.get('city_id') ?? '';
   const sort = searchParams.get('sort') ?? 'distance';
 
   const { lat, lng, loading: geoLoading, error: geoError, requestLocation } = useGeolocation();
@@ -183,6 +184,7 @@ export default function HomePage() {
   const queryParams: RestaurantSearchParams = {
     keyword: keyword || undefined,
     prefecture_id: prefectureId || undefined,
+    city_id: cityId || undefined,
     sort,
   };
 
@@ -201,9 +203,8 @@ export default function HomePage() {
   } = useRestaurants(queryParams);
 
   const restaurants = data?.pages.flatMap((page) => page.data) ?? [];
-  const totalCount = data?.pages[0]?.meta?.total;
 
-  const hasSearchFilter = keyword || prefectureId;
+  const hasSearchFilter = keyword || prefectureId || cityId;
 
   // IntersectionObserver for infinite scroll
   useEffect(() => {
@@ -226,7 +227,7 @@ export default function HomePage() {
   // Scroll to top when filters/sort change
   useEffect(() => {
     window.scrollTo({ top: 0 });
-  }, [keyword, prefectureId, sort]);
+  }, [keyword, prefectureId, cityId, sort]);
 
   const updateParam = useCallback(
     (key: string, value: string) => {
@@ -251,7 +252,7 @@ export default function HomePage() {
       <div className="flex flex-col md:flex-row justify-between items-end md:items-center mb-6 gap-4">
         <h1 className="text-2xl font-bold text-gray-800">
           {hasSearchFilter
-            ? `検索結果: ${totalCount ?? 0} 件`
+            ? `検索結果: ${restaurants.length}${hasNextPage ? '+' : ''} 件`
             : 'すべてのお店'}
         </h1>
 

@@ -63,6 +63,7 @@ export interface Restaurant {
 
 export interface RestaurantDetail extends Restaurant {
   menu_info: string | null;
+  postal_code: string | null;
   user_id: number;
   reviews: import('./review').Review[];
   review_summary: ReviewSummary | null;
@@ -75,8 +76,9 @@ export interface RestaurantDetail extends Restaurant {
 export interface RestaurantSearchParams {
   keyword?: string;
   prefecture_id?: string;
+  city_id?: string;
   sort?: string;
   lat?: string;
   lng?: string;
-  page?: number;
+  cursor?: string;
 }

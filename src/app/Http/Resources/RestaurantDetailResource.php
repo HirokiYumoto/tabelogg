@@ -24,6 +24,7 @@ class RestaurantDetailResource extends JsonResource
                 ] : null,
             ]),
             'address' => $this->address,
+            'postal_code' => $this->postal_code,
             'nearest_station' => $this->nearest_station,
             'latitude' => $this->latitude,
             'longitude' => $this->longitude,

@@ -40,6 +40,7 @@ function OwnerRestaurantsSection({ restaurants }: { restaurants: OwnedRestaurant
     mutationFn: deleteRestaurant,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['restaurants'] });
     },
   });
 

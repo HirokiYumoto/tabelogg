@@ -1,12 +1,13 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
-import { useQuery } from '@tanstack/react-query';
-import { storeRestaurant, getPrefectures } from '@/api/restaurants';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { storeRestaurant, getPrefectures, getCities, lookupPostalCode, resolveCity } from '@/api/restaurants';
 import Spinner from '@/components/ui/Spinner';
+import type { Prefecture } from '@/types/restaurant';
 
 const DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土', '毎日'];
 
@@ -15,6 +16,7 @@ const STAY_MINUTES_OPTIONS = [30, 60, 90, 120];
 const restaurantSchema = z.object({
   name: z.string().min(1, '店舗名を入力してください').max(255, '店舗名は255文字以内で入力してください'),
   description: z.string().min(1, '説明を入力してください'),
+  postal_code: z.string().regex(/^\d{7}$/, '7桁の数字で入力してください'),
   prefecture_id: z.string().min(1, '都道府県を選択してください'),
   city_id: z.string().min(1, '市区町村を選択してください'),
   address: z.string().min(1, '住所を入力してください').max(255, '住所は255文字以内で入力してください'),
@@ -25,7 +27,6 @@ const restaurantSchema = z.object({
     .array(
       z.object({
         type: z.enum(['counter', 'table'], { error: '座席タイプを選択してください' }),
-        name: z.string().min(1, '座席名を入力してください'),
         seats_per_unit: z.coerce.number().min(1, '1以上を入力してください'),
         capacity: z.coerce.number().min(1, '1以上を入力してください'),
       })
@@ -47,10 +48,14 @@ type RestaurantFormData = z.infer<typeof restaurantSchema>;
 
 export default function RestaurantCreatePage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [serverErrors, setServerErrors] = useState<Record<string, string[]>>({});
   const [isSubmittingForm, setIsSubmittingForm] = useState(false);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [postalLoading, setPostalLoading] = useState(false);
+  const [postalError, setPostalError] = useState('');
+  const [pendingCityId, setPendingCityId] = useState<string | null>(null);
 
   const { data: prefectures, isLoading: prefLoading } = useQuery({
     queryKey: ['prefectures'],
@@ -62,6 +67,7 @@ export default function RestaurantCreatePage() {
     handleSubmit,
     control,
     watch,
+    setValue,
     formState: { errors },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } = useForm<RestaurantFormData>({
@@ -69,13 +75,14 @@ export default function RestaurantCreatePage() {
     defaultValues: {
       name: '',
       description: '',
+      postal_code: '',
       prefecture_id: '',
       city_id: '',
       address: '',
       nearest_station: '',
       menu_info: '',
       max_party_size: '',
-      seat_types: [{ type: 'table', name: '', seats_per_unit: 4, capacity: 1 }],
+      seat_types: [{ type: 'table', seats_per_unit: 4, capacity: 1 }],
       time_settings: [{ day_of_week: 7, start_time: '11:00', end_time: '22:00', stay_minutes: 60 }],
     },
   });
@@ -94,11 +101,62 @@ export default function RestaurantCreatePage() {
 
   const selectedPrefectureId = watch('prefecture_id');
 
-  const cities = useMemo(() => {
-    if (!prefectures || !selectedPrefectureId) return [];
-    const pref = prefectures.find((p) => p.id === Number(selectedPrefectureId));
-    return pref?.cities ?? [];
-  }, [prefectures, selectedPrefectureId]);
+  const { data: cities = [] } = useQuery({
+    queryKey: ['cities', selectedPrefectureId],
+    queryFn: () => getCities(Number(selectedPrefectureId)),
+    enabled: !!selectedPrefectureId,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  // Apply pending city selection once cities are loaded
+  useEffect(() => {
+    if (pendingCityId && cities.length > 0 && cities.some((c) => String(c.id) === pendingCityId)) {
+      setValue('city_id', pendingCityId);
+      setPendingCityId(null);
+    }
+  }, [cities, pendingCityId, setValue]);
+
+  const handlePostalLookup = async () => {
+    const code = watch('postal_code');
+    if (!code || !/^\d{7}$/.test(code)) {
+      setPostalError('7桁の数字で入力してください');
+      return;
+    }
+    setPostalLoading(true);
+    setPostalError('');
+    try {
+      const result = await lookupPostalCode(code);
+      if (!result) {
+        setPostalError('該当する住所が見つかりませんでした');
+        return;
+      }
+      // Find matching prefecture
+      const matchedPref = prefectures?.find((p: Prefecture) => p.name === result.prefecture);
+      if (!matchedPref) {
+        setPostalError('都道府県のマッチに失敗しました');
+        return;
+      }
+      // Resolve city (create if not exists)
+      const city = await resolveCity(matchedPref.id, result.city);
+      // Pre-populate cities cache so the select has the option immediately
+      const citiesKey = ['cities', String(matchedPref.id)];
+      const cached = queryClient.getQueryData<{ id: number; name: string; prefecture_id: number }[]>(citiesKey);
+      if (cached) {
+        if (!cached.some((c) => c.id === city.id)) {
+          queryClient.setQueryData(citiesKey, [...cached, { id: city.id, name: city.name, prefecture_id: city.prefecture_id }]);
+        }
+      } else {
+        queryClient.setQueryData(citiesKey, [{ id: city.id, name: city.name, prefecture_id: city.prefecture_id }]);
+      }
+      setValue('prefecture_id', String(matchedPref.id));
+      setPendingCityId(String(city.id));
+      setValue('address', result.town);
+    } catch {
+      setPostalError('住所の検索に失敗しました');
+    } finally {
+      setPostalLoading(false);
+    }
+  };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -127,6 +185,7 @@ export default function RestaurantCreatePage() {
       formData.append('name', data.name);
       formData.append('description', data.description);
       formData.append('city_id', data.city_id);
+      formData.append('postal_code', data.postal_code);
       formData.append('address', data.address);
       if (data.nearest_station) formData.append('nearest_station', data.nearest_station);
       if (data.menu_info) formData.append('menu_info', data.menu_info);
@@ -134,8 +193,7 @@ export default function RestaurantCreatePage() {
 
       data.seat_types.forEach((seat, i) => {
         formData.append(`seat_types[${i}][type]`, seat.type);
-        formData.append(`seat_types[${i}][name]`, seat.name);
-        formData.append(`seat_types[${i}][seats_per_unit]`, String(seat.seats_per_unit));
+        formData.append(`seat_types[${i}][seats_per_unit]`, String(seat.type === 'counter' ? 1 : seat.seats_per_unit));
         formData.append(`seat_types[${i}][capacity]`, String(seat.capacity));
       });
 
@@ -212,6 +270,38 @@ export default function RestaurantCreatePage() {
             {serverErrors.description?.map((msg, i) => (
               <p key={i} className="mt-1 text-sm text-red-600">{msg}</p>
             ))}
+          </div>
+
+          {/* Postal code */}
+          <div>
+            <label htmlFor="postal_code" className="block text-sm font-medium text-gray-700 mb-1">
+              郵便番号 <span className="text-red-500">*</span>
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="postal_code"
+                type="text"
+                maxLength={7}
+                placeholder="1000001"
+                {...register('postal_code')}
+                className={`w-40 rounded-md border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-400 ${
+                  errors.postal_code || serverErrors.postal_code ? 'border-red-500' : 'border-gray-300'
+                }`}
+              />
+              <button
+                type="button"
+                onClick={handlePostalLookup}
+                disabled={postalLoading}
+                className="rounded-md bg-gray-600 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {postalLoading ? '検索中...' : '住所を検索'}
+              </button>
+            </div>
+            {errors.postal_code && <p className="mt-1 text-sm text-red-600">{errors.postal_code.message}</p>}
+            {serverErrors.postal_code?.map((msg, i) => (
+              <p key={i} className="mt-1 text-sm text-red-600">{msg}</p>
+            ))}
+            {postalError && <p className="mt-1 text-sm text-red-600">{postalError}</p>}
           </div>
 
           {/* Prefecture / City cascade */}
@@ -344,7 +434,7 @@ export default function RestaurantCreatePage() {
             <h2 className="text-lg font-semibold text-gray-800">座席タイプ</h2>
             <button
               type="button"
-              onClick={() => appendSeat({ type: 'table', name: '', seats_per_unit: 4, capacity: 1 })}
+              onClick={() => appendSeat({ type: 'table', seats_per_unit: 4, capacity: 1 })}
               className="rounded-md bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-600"
             >
               + 追加
@@ -372,7 +462,7 @@ export default function RestaurantCreatePage() {
                     </button>
                   )}
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">タイプ</label>
                     <select
@@ -388,38 +478,28 @@ export default function RestaurantCreatePage() {
                       <p className="mt-1 text-xs text-red-600">{errors.seat_types[index].type?.message}</p>
                     )}
                   </div>
+                  {watch(`seat_types.${index}.type`) === 'table' && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">何人掛け</label>
+                      <input
+                        type="number"
+                        min={1}
+                        {...register(`seat_types.${index}.seats_per_unit`)}
+                        className={`w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-400 ${
+                          errors.seat_types?.[index]?.seats_per_unit ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                      />
+                      {errors.seat_types?.[index]?.seats_per_unit && (
+                        <p className="mt-1 text-xs text-red-600">
+                          {errors.seat_types[index].seats_per_unit?.message}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">座席名</label>
-                    <input
-                      type="text"
-                      {...register(`seat_types.${index}.name`)}
-                      placeholder="例: テーブル席A"
-                      className={`w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-400 ${
-                        errors.seat_types?.[index]?.name ? 'border-red-500' : 'border-gray-300'
-                      }`}
-                    />
-                    {errors.seat_types?.[index]?.name && (
-                      <p className="mt-1 text-xs text-red-600">{errors.seat_types[index].name?.message}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">1席あたりの人数</label>
-                    <input
-                      type="number"
-                      min={1}
-                      {...register(`seat_types.${index}.seats_per_unit`)}
-                      className={`w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-400 ${
-                        errors.seat_types?.[index]?.seats_per_unit ? 'border-red-500' : 'border-gray-300'
-                      }`}
-                    />
-                    {errors.seat_types?.[index]?.seats_per_unit && (
-                      <p className="mt-1 text-xs text-red-600">
-                        {errors.seat_types[index].seats_per_unit?.message}
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">席数</label>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      {watch(`seat_types.${index}.type`) === 'counter' ? '席数' : '卓数'}
+                    </label>
                     <input
                       type="number"
                       min={1}

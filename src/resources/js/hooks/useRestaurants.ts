@@ -1,17 +1,14 @@
 import { useQuery, useInfiniteQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { getRestaurants, getRestaurant, getPrefectures } from '@/api/restaurants';
-import type { PaginatedResponse } from '@/api/restaurants';
+import type { CursorPaginatedResponse } from '@/api/restaurants';
 import type { Restaurant, RestaurantDetail, RestaurantSearchParams } from '@/types/restaurant';
 
 export function useRestaurants(params: RestaurantSearchParams) {
   return useInfiniteQuery({
     queryKey: ['restaurants', params],
-    queryFn: ({ pageParam = 1 }) => getRestaurants({ ...params, page: pageParam }),
-    getNextPageParam: (lastPage) =>
-      lastPage.meta.current_page < lastPage.meta.last_page
-        ? lastPage.meta.current_page + 1
-        : undefined,
-    initialPageParam: 1,
+    queryFn: ({ pageParam }) => getRestaurants({ ...params, cursor: pageParam || undefined }),
+    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
+    initialPageParam: null as string | null,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
@@ -27,7 +24,7 @@ export function useRestaurant(id: number) {
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     placeholderData: () => {
-      const queriesData = queryClient.getQueriesData<InfiniteData<PaginatedResponse<Restaurant>>>({
+      const queriesData = queryClient.getQueriesData<InfiniteData<CursorPaginatedResponse<Restaurant>>>({
         queryKey: ['restaurants'],
       });
       for (const [, data] of queriesData) {

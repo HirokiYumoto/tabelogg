@@ -1,7 +1,9 @@
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect, type FormEvent } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePrefectures } from '@/hooks/useRestaurants';
+import { getCities } from '@/api/restaurants';
 
 export default function SiteHeader() {
   const { user, isAdmin, logout } = useAuth();
@@ -13,11 +15,20 @@ export default function SiteHeader() {
 
   const [keyword, setKeyword] = useState(searchParams.get('keyword') || '');
   const [prefectureId, setPrefectureId] = useState(searchParams.get('prefecture_id') || '');
+  const [cityId, setCityId] = useState(searchParams.get('city_id') || '');
+
+  const { data: cities } = useQuery({
+    queryKey: ['cities', prefectureId],
+    queryFn: () => getCities(Number(prefectureId)),
+    enabled: !!prefectureId,
+    staleTime: 10 * 60 * 1000,
+  });
 
   // Sync state when URL params change externally
   useEffect(() => {
     setKeyword(searchParams.get('keyword') || '');
     setPrefectureId(searchParams.get('prefecture_id') || '');
+    setCityId(searchParams.get('city_id') || '');
   }, [searchParams]);
 
   const handleLogout = async () => {
@@ -25,11 +36,17 @@ export default function SiteHeader() {
     setMobileMenuOpen(false);
   };
 
+  const handlePrefectureChange = (value: string) => {
+    setPrefectureId(value);
+    setCityId('');
+  };
+
   const handleSearch = (e: FormEvent) => {
     e.preventDefault();
     const params = new URLSearchParams();
     if (keyword.trim()) params.set('keyword', keyword.trim());
     if (prefectureId) params.set('prefecture_id', prefectureId);
+    if (cityId) params.set('city_id', cityId);
     navigate(`/?${params.toString()}`);
     setMobileMenuOpen(false);
   };
@@ -59,7 +76,7 @@ export default function SiteHeader() {
             <div className="relative w-24 sm:w-32 flex-shrink-0 border-r border-gray-200">
               <select
                 value={prefectureId}
-                onChange={(e) => setPrefectureId(e.target.value)}
+                onChange={(e) => handlePrefectureChange(e.target.value)}
                 className="w-full h-full py-2 pl-2 sm:pl-3 pr-6 sm:pr-8 text-xs sm:text-sm bg-transparent border-none focus:ring-0 text-gray-700 cursor-pointer truncate"
               >
                 <option value="">エリア</option>
@@ -70,6 +87,24 @@ export default function SiteHeader() {
                 ))}
               </select>
             </div>
+
+            {/* City select */}
+            {prefectureId && (
+              <div className="relative w-24 sm:w-32 flex-shrink-0 border-r border-gray-200">
+                <select
+                  value={cityId}
+                  onChange={(e) => setCityId(e.target.value)}
+                  className="w-full h-full py-2 pl-2 sm:pl-3 pr-6 sm:pr-8 text-xs sm:text-sm bg-transparent border-none focus:ring-0 text-gray-700 cursor-pointer truncate"
+                >
+                  <option value="">市区町村</option>
+                  {cities?.map((city) => (
+                    <option key={city.id} value={city.id}>
+                      {city.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Keyword input */}
             <input

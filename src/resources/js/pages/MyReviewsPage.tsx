@@ -1,9 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getUserReviews } from '@/api/dashboard';
 import { deleteReview } from '@/api/reviews';
-import Pagination from '@/components/ui/Pagination';
 import Spinner from '@/components/ui/Spinner';
 
 function stars(rating: number) {
@@ -11,12 +10,20 @@ function stars(rating: number) {
 }
 
 export default function MyReviewsPage() {
-  const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['userReviews', page],
-    queryFn: () => getUserReviews(page),
+  const {
+    data,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ['userReviews'],
+    queryFn: ({ pageParam }) => getUserReviews(pageParam || undefined),
+    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
+    initialPageParam: null as string | null,
   });
 
   const deleteMutation = useMutation({
@@ -34,12 +41,29 @@ export default function MyReviewsPage() {
     deleteMutation.mutate({ reviewId, restaurantId });
   };
 
+  // IntersectionObserver for infinite scroll
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { rootMargin: '200px' },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
   if (isLoading) {
     return <Spinner className="py-20" />;
   }
 
-  const reviews = data?.data ?? [];
-  const meta = data?.meta;
+  const reviews = data?.pages.flatMap((page) => page.data) ?? [];
 
   return (
     <div className="max-w-4xl mx-auto px-6 sm:px-12 lg:px-20 py-10">
@@ -96,12 +120,15 @@ export default function MyReviewsPage() {
             ))}
           </ul>
 
-          {meta && (
-            <Pagination
-              currentPage={meta.current_page}
-              lastPage={meta.last_page}
-              onPageChange={setPage}
-            />
+          {/* Sentinel for infinite scroll */}
+          <div ref={sentinelRef} className="h-1" />
+
+          {isFetchingNextPage && <Spinner className="py-8" />}
+
+          {!hasNextPage && (
+            <p className="text-center text-sm text-gray-400 py-8">
+              すべての口コミを表示しました
+            </p>
           )}
         </>
       )}
