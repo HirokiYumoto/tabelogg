@@ -1,12 +1,14 @@
 export interface Prefecture {
   id: number;
   name: string;
+  reading?: string;
   cities?: City[];
 }
 
 export interface City {
   id: number;
   name: string;
+  reading?: string;
   prefecture?: { id: number; name: string };
 }
 

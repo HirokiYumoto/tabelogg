@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePrefectures } from '@/hooks/useRestaurants';
 import { getCities } from '@/api/restaurants';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 
 export default function SiteHeader() {
   const { user, isAdmin, logout } = useAuth();
@@ -70,41 +71,42 @@ export default function SiteHeader() {
         <div className="flex flex-grow max-w-2xl mx-2 sm:mx-4">
           <form
             onSubmit={handleSearch}
-            className="w-full flex rounded-md shadow-sm border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-orange-500 focus-within:border-orange-500 bg-gray-50"
+            className="w-full flex rounded-md shadow-sm border border-gray-300 focus-within:ring-2 focus-within:ring-orange-500 focus-within:border-orange-500 bg-gray-50"
           >
             {/* Prefecture select */}
             <div className="relative w-24 sm:w-32 flex-shrink-0 border-r border-gray-200">
-              <select
+              <SearchableSelect
+                compact
                 value={prefectureId}
-                onChange={(e) => handlePrefectureChange(e.target.value)}
-                className="w-full h-full py-2 pl-2 sm:pl-3 pr-6 sm:pr-8 text-xs sm:text-sm bg-transparent border-none focus:ring-0 text-gray-700 cursor-pointer truncate"
-              >
-                <option value="">エリア</option>
-                {prefectures?.map((pref) => (
-                  <option key={pref.id} value={pref.id}>
-                    {pref.name}
-                  </option>
-                ))}
-              </select>
+                onChange={handlePrefectureChange}
+                placeholder="エリア"
+                options={
+                  prefectures?.map((pref) => ({
+                    value: String(pref.id),
+                    label: pref.name,
+                    reading: pref.reading,
+                  })) ?? []
+                }
+              />
             </div>
 
             {/* City select */}
-            {prefectureId && (
-              <div className="relative w-24 sm:w-32 flex-shrink-0 border-r border-gray-200">
-                <select
-                  value={cityId}
-                  onChange={(e) => setCityId(e.target.value)}
-                  className="w-full h-full py-2 pl-2 sm:pl-3 pr-6 sm:pr-8 text-xs sm:text-sm bg-transparent border-none focus:ring-0 text-gray-700 cursor-pointer truncate"
-                >
-                  <option value="">市区町村</option>
-                  {cities?.map((city) => (
-                    <option key={city.id} value={city.id}>
-                      {city.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+            <div className="relative w-24 sm:w-32 flex-shrink-0 border-r border-gray-200">
+              <SearchableSelect
+                compact
+                value={cityId}
+                onChange={setCityId}
+                placeholder="市区町村"
+                disabled={!prefectureId}
+                options={
+                  cities?.map((city) => ({
+                    value: String(city.id),
+                    label: city.name,
+                    reading: city.reading,
+                  })) ?? []
+                }
+              />
+            </div>
 
             {/* Keyword input */}
             <input

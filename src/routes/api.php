@@ -62,6 +62,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Cities
     Route::post('/cities/resolve', [CityController::class, 'resolve']);
+    Route::get('/postal-codes/reverse', [CityController::class, 'reversePostalCode']);
 
     // Dashboard (マイページ)
     Route::get('/dashboard', [DashboardController::class, 'index']);

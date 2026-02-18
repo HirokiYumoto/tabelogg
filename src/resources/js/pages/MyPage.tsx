@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
@@ -33,8 +34,73 @@ function stars(rating: number) {
    Owner: Restaurant management section
    ======================================================================== */
 
+function RestaurantCard({ r, onDestroy, destroying }: { r: OwnedRestaurant; onDestroy: (id: number, name: string) => void; destroying: boolean }) {
+  return (
+    <div className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition flex items-start gap-4 bg-white">
+      {/* Thumbnail */}
+      <div className="w-20 h-20 bg-gray-100 rounded overflow-hidden flex-shrink-0 border border-gray-200">
+        {r.image ? (
+          <img src={r.image} alt={r.name} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-2xl bg-gray-50">
+            🍜
+          </div>
+        )}
+      </div>
+
+      <div className="flex-grow min-w-0">
+        <h4 className="font-bold text-lg mb-1">
+          <Link
+            to={`/restaurants/${r.id}`}
+            className="hover:text-orange-500 hover:underline"
+          >
+            {r.name}
+          </Link>
+        </h4>
+        {r.city && (
+          <p className="text-xs text-gray-500 mb-2">
+            {r.city.prefecture?.name} {r.city.name}
+          </p>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2 mt-3">
+          <Link
+            to={`/restaurants/${r.id}`}
+            className="text-xs whitespace-nowrap text-white px-3 py-1.5 rounded transition font-bold bg-gray-700 hover:bg-gray-800"
+          >
+            確認
+          </Link>
+          <Link
+            to={`/restaurants/${r.id}/edit`}
+            className="text-xs whitespace-nowrap text-white px-3 py-1.5 rounded transition font-bold bg-orange-500 hover:bg-orange-600"
+          >
+            編集
+          </Link>
+          <Link
+            to={`/owner/restaurants/${r.id}/dashboard`}
+            className="text-xs whitespace-nowrap text-white px-3 py-1.5 rounded transition font-bold bg-green-500 hover:bg-green-600"
+          >
+            予約確認
+          </Link>
+          <button
+            type="button"
+            onClick={() => onDestroy(r.id, r.name)}
+            disabled={destroying}
+            className="text-xs whitespace-nowrap text-white px-3 py-1.5 rounded transition font-bold bg-red-500 hover:bg-red-600 disabled:opacity-50"
+          >
+            削除
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const INITIAL_DISPLAY_COUNT = 4;
+
 function OwnerRestaurantsSection({ restaurants }: { restaurants: OwnedRestaurant[] }) {
   const queryClient = useQueryClient();
+  const [showAll, setShowAll] = useState(false);
 
   const destroyMutation = useMutation({
     mutationFn: deleteRestaurant,
@@ -48,6 +114,9 @@ function OwnerRestaurantsSection({ restaurants }: { restaurants: OwnedRestaurant
     if (!window.confirm(`「${name}」を削除しますか？この操作は取り消せません。`)) return;
     destroyMutation.mutate(id);
   };
+
+  const hasMore = restaurants.length > INITIAL_DISPLAY_COUNT;
+  const displayed = showAll ? restaurants : restaurants.slice(0, INITIAL_DISPLAY_COUNT);
 
   return (
     <>
@@ -69,77 +138,39 @@ function OwnerRestaurantsSection({ restaurants }: { restaurants: OwnedRestaurant
 
       {/* Owned restaurants */}
       <div className="bg-white rounded-lg shadow-md overflow-hidden mb-8">
-        <div className="p-6 bg-orange-50 border-b border-orange-100">
+        <div className="p-6 bg-orange-50 border-b border-orange-100 flex justify-between items-center">
           <h3 className="font-bold text-lg text-orange-800">あなたの掲載店舗管理</h3>
+          {restaurants.length > 0 && (
+            <span className="text-sm text-orange-600 font-medium">{restaurants.length}件</span>
+          )}
         </div>
         <div className="p-6">
           {restaurants.length === 0 ? (
             <p className="text-gray-400 text-sm text-center py-4">登録されている店舗はありません。</p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {restaurants.map((r) => (
-                <div
-                  key={r.id}
-                  className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition flex items-start gap-4 bg-white"
-                >
-                  {/* Thumbnail */}
-                  <div className="w-20 h-20 bg-gray-100 rounded overflow-hidden flex-shrink-0 border border-gray-200">
-                    {r.image ? (
-                      <img src={r.image} alt={r.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-2xl bg-gray-50">
-                        🍜
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex-grow min-w-0">
-                    <h4 className="font-bold text-lg mb-1">
-                      <Link
-                        to={`/restaurants/${r.id}`}
-                        className="hover:text-orange-500 hover:underline"
-                      >
-                        {r.name}
-                      </Link>
-                    </h4>
-                    {r.city && (
-                      <p className="text-xs text-gray-500 mb-2">
-                        {r.city.prefecture?.name} {r.city.name}
-                      </p>
-                    )}
-
-                    <div className="flex flex-wrap items-center gap-2 mt-3">
-                      <Link
-                        to={`/restaurants/${r.id}`}
-                        className="text-xs whitespace-nowrap text-white px-3 py-1.5 rounded transition font-bold bg-gray-700 hover:bg-gray-800"
-                      >
-                        確認
-                      </Link>
-                      <Link
-                        to={`/restaurants/${r.id}/edit`}
-                        className="text-xs whitespace-nowrap text-white px-3 py-1.5 rounded transition font-bold bg-orange-500 hover:bg-orange-600"
-                      >
-                        編集
-                      </Link>
-                      <Link
-                        to={`/owner/restaurants/${r.id}/dashboard`}
-                        className="text-xs whitespace-nowrap text-white px-3 py-1.5 rounded transition font-bold bg-green-500 hover:bg-green-600"
-                      >
-                        予約確認
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => handleDestroy(r.id, r.name)}
-                        disabled={destroyMutation.isPending}
-                        className="text-xs whitespace-nowrap text-white px-3 py-1.5 rounded transition font-bold bg-red-500 hover:bg-red-600 disabled:opacity-50"
-                      >
-                        削除
-                      </button>
-                    </div>
-                  </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {displayed.map((r) => (
+                  <RestaurantCard
+                    key={r.id}
+                    r={r}
+                    onDestroy={handleDestroy}
+                    destroying={destroyMutation.isPending}
+                  />
+                ))}
+              </div>
+              {hasMore && (
+                <div className="mt-6 text-center">
+                  <button
+                    type="button"
+                    onClick={() => setShowAll(!showAll)}
+                    className="inline-block text-sm text-orange-500 hover:text-orange-600 font-bold border border-orange-500 hover:bg-orange-50 px-6 py-2 rounded-full transition"
+                  >
+                    {showAll ? '閉じる' : `全て見る（残り${restaurants.length - INITIAL_DISPLAY_COUNT}件）`}
+                  </button>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </div>
       </div>

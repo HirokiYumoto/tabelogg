@@ -82,7 +82,9 @@ class ReservationController extends Controller
 
         // 2. その時間の「滞在時間ルール」を取得
         $timeSetting = RestaurantTimeSetting::where('restaurant_id', $restaurant->id)
-            ->where('day_of_week', $dayOfWeek)
+            ->where(function ($q) use ($dayOfWeek) {
+                $q->where('day_of_week', $dayOfWeek)->orWhere('day_of_week', 7);
+            })
             ->where('start_time', '<=', $request->reservation_time)
             ->where('end_time', '>=', $request->reservation_time)
             ->first();

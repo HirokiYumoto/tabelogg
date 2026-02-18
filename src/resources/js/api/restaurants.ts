@@ -66,6 +66,17 @@ export async function resolveCity(prefectureId: number, name: string): Promise<{
   return data;
 }
 
+export async function reversePostalCode(prefectureId: number, cityId: number, address: string): Promise<string | null> {
+  try {
+    const { data } = await apiClient.get('/postal-codes/reverse', {
+      params: { prefecture_id: prefectureId, city_id: cityId, address },
+    });
+    return data.postal_code;
+  } catch {
+    return null;
+  }
+}
+
 export interface PostalCodeResult {
   prefecture: string;
   city: string;

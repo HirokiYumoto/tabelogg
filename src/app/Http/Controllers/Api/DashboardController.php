@@ -136,6 +136,7 @@ class DashboardController extends Controller
         if ($user->isStoreOwner()) {
             $result['owned_restaurants'] = $user->restaurants()
                 ->with(['images', 'city.prefecture'])
+                ->latest()
                 ->get()
                 ->map(fn($r) => [
                     'id' => $r->id,

@@ -43,9 +43,16 @@ class RestaurantController extends Controller
             $query->whereIn('city_id', City::where('prefecture_id', $request->prefecture_id)->select('id'));
         }
 
-        // City filter
+        // City filter (prefix match for designated cities like 横浜市 → 横浜市西区, 横浜市中区, etc.)
         if ($request->filled('city_id')) {
-            $query->where('city_id', $request->input('city_id'));
+            $selectedCity = City::find($request->input('city_id'));
+            if ($selectedCity) {
+                $query->whereIn('city_id',
+                    City::where('prefecture_id', $selectedCity->prefecture_id)
+                        ->where('name', 'like', $selectedCity->name . '%')
+                        ->select('id')
+                );
+            }
         }
 
         // Sort

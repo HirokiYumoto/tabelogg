@@ -9,7 +9,7 @@ class Prefecture extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name'];
+    protected $fillable = ['name', 'reading'];
 
     // ★★★ これが足りていなかったためエラーになっていました ★★★
     // 都道府県は複数の市区町村を持つ

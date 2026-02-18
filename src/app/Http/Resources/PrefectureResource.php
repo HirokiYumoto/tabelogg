@@ -12,10 +12,12 @@ class PrefectureResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
+            'reading' => $this->reading,
             'cities' => $this->whenLoaded('cities', fn() =>
                 $this->cities->map(fn($city) => [
                     'id' => $city->id,
                     'name' => $city->name,
+                    'reading' => $city->reading,
                 ])
             ),
         ];

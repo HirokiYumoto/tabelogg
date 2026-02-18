@@ -5,8 +5,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getRestaurant, updateRestaurant, getPrefectures, getCities, lookupPostalCode, resolveCity } from '@/api/restaurants';
+import { getRestaurant, updateRestaurant, getPrefectures, getCities, lookupPostalCode, resolveCity, reversePostalCode } from '@/api/restaurants';
 import Spinner from '@/components/ui/Spinner';
+import SearchableSelect from '@/components/ui/SearchableSelect';
 import type { Prefecture } from '@/types/restaurant';
 
 const DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土', '毎日'];
@@ -58,6 +59,7 @@ export default function RestaurantEditPage() {
   const [existingImages, setExistingImages] = useState<{ id: number; image_path: string }[]>([]);
   const [deletedImageIds, setDeletedImageIds] = useState<number[]>([]);
   const [postalLoading, setPostalLoading] = useState(false);
+  const [reversePostalLoading, setReversePostalLoading] = useState(false);
   const [postalError, setPostalError] = useState('');
   const [pendingCityId, setPendingCityId] = useState<string | null>(null);
 
@@ -193,6 +195,30 @@ export default function RestaurantEditPage() {
       setPostalError('住所の検索に失敗しました');
     } finally {
       setPostalLoading(false);
+    }
+  };
+
+  const handleReversePostalLookup = async () => {
+    const prefId = watch('prefecture_id');
+    const cId = watch('city_id');
+    const addr = watch('address');
+    if (!prefId || !cId) {
+      setPostalError('都道府県と市区町村を先に選択してください');
+      return;
+    }
+    setReversePostalLoading(true);
+    setPostalError('');
+    try {
+      const code = await reversePostalCode(Number(prefId), Number(cId), addr || '');
+      if (code) {
+        setValue('postal_code', code, { shouldValidate: true });
+      } else {
+        setPostalError('該当する郵便番号が見つかりませんでした');
+      }
+    } catch {
+      setPostalError('郵便番号の検索に失敗しました');
+    } finally {
+      setReversePostalLoading(false);
     }
   };
 
@@ -351,6 +377,14 @@ export default function RestaurantEditPage() {
               >
                 {postalLoading ? '検索中...' : '住所を検索'}
               </button>
+              <button
+                type="button"
+                onClick={handleReversePostalLookup}
+                disabled={reversePostalLoading}
+                className="rounded-md bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {reversePostalLoading ? '検索中...' : '住所から逆引き'}
+              </button>
             </div>
             {errors.postal_code && <p className="mt-1 text-sm text-red-600">{errors.postal_code.message}</p>}
             {serverErrors.postal_code?.map((msg, i) => (
@@ -362,47 +396,48 @@ export default function RestaurantEditPage() {
           {/* Prefecture / City cascade */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label htmlFor="prefecture_id" className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 都道府県 <span className="text-red-500">*</span>
               </label>
-              <select
-                id="prefecture_id"
-                {...register('prefecture_id')}
-                className={`w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-400 ${
-                  errors.prefecture_id ? 'border-red-500' : 'border-gray-300'
-                }`}
-              >
-                <option value="">選択してください</option>
-                {prefectures?.map((pref) => (
-                  <option key={pref.id} value={pref.id}>
-                    {pref.name}
-                  </option>
-                ))}
-              </select>
+              <SearchableSelect
+                value={watch('prefecture_id')}
+                onChange={(val) => {
+                  setValue('prefecture_id', val, { shouldValidate: true });
+                  setValue('city_id', '');
+                }}
+                placeholder="選択してください"
+                error={!!errors.prefecture_id}
+                options={
+                  prefectures?.map((pref) => ({
+                    value: String(pref.id),
+                    label: pref.name,
+                    reading: pref.reading,
+                  })) ?? []
+                }
+              />
               {errors.prefecture_id && (
                 <p className="mt-1 text-sm text-red-600">{errors.prefecture_id.message}</p>
               )}
             </div>
 
             <div>
-              <label htmlFor="city_id" className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 市区町村 <span className="text-red-500">*</span>
               </label>
-              <select
-                id="city_id"
-                {...register('city_id')}
+              <SearchableSelect
+                value={watch('city_id')}
+                onChange={(val) => setValue('city_id', val, { shouldValidate: true })}
+                placeholder="選択してください"
                 disabled={!selectedPrefectureId}
-                className={`w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-400 disabled:bg-gray-100 disabled:cursor-not-allowed ${
-                  errors.city_id ? 'border-red-500' : 'border-gray-300'
-                }`}
-              >
-                <option value="">選択してください</option>
-                {cities.map((city) => (
-                  <option key={city.id} value={city.id}>
-                    {city.name}
-                  </option>
-                ))}
-              </select>
+                error={!!errors.city_id}
+                options={
+                  cities.map((city) => ({
+                    value: String(city.id),
+                    label: city.name,
+                    reading: city.reading,
+                  }))
+                }
+              />
               {errors.city_id && <p className="mt-1 text-sm text-red-600">{errors.city_id.message}</p>}
               {serverErrors.city_id?.map((msg, i) => (
                 <p key={i} className="mt-1 text-sm text-red-600">{msg}</p>

@@ -11,8 +11,94 @@ import StarRating from '@/components/ui/StarRating';
 import Spinner from '@/components/ui/Spinner';
 import ImageGallery from '@/components/ui/ImageGallery';
 import ReservationWizard from '@/components/reservation/ReservationWizard';
+import type { TimeSetting } from '@/types/restaurant';
 
 type TabKey = 'top' | 'menu' | 'reviews' | 'access' | 'reservation';
+
+const DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'] as const;
+
+function BusinessHours({ timeSettings }: { timeSettings: TimeSetting[] }) {
+  // Group by day_of_week (7 = 毎日)
+  const byDay = new Map<number, TimeSetting[]>();
+  for (const ts of timeSettings) {
+    if (ts.day_of_week === 7) {
+      // 「毎日」→ 0〜6 全曜日に展開
+      for (let d = 0; d <= 6; d++) {
+        const list = byDay.get(d) ?? [];
+        list.push(ts);
+        byDay.set(d, list);
+      }
+    } else {
+      const list = byDay.get(ts.day_of_week) ?? [];
+      list.push(ts);
+      byDay.set(ts.day_of_week, list);
+    }
+  }
+
+  // Sort time periods within each day
+  for (const list of byDay.values()) {
+    list.sort((a, b) => a.start_time.localeCompare(b.start_time));
+  }
+
+  // Check if all days have identical hours → show compact "毎日" format
+  const dayOrder = [1, 2, 3, 4, 5, 6, 0];
+  const allSame = dayOrder.every((d) => {
+    const a = byDay.get(d);
+    const b = byDay.get(dayOrder[0]);
+    if (!a && !b) return true;
+    if (!a || !b || a.length !== b.length) return false;
+    return a.every((p, i) => p.start_time === b[i].start_time && p.end_time === b[i].end_time);
+  }) && byDay.size > 0;
+
+  if (allSame) {
+    const periods = byDay.get(dayOrder[0])!;
+    return (
+      <div className="bg-gray-50 rounded-lg p-4">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">営業時間</h3>
+        <div className="flex items-center text-sm">
+          <span className="w-12 font-medium text-gray-700">毎日</span>
+          <span className="text-gray-600">
+            {periods
+              .map((p) => `${p.start_time.slice(0, 5)} - ${p.end_time.slice(0, 5)}`)
+              .join('、')}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-gray-50 rounded-lg p-4">
+      <h3 className="text-sm font-semibold text-gray-700 mb-3">営業時間</h3>
+      <div className="space-y-1">
+        {dayOrder.map((day) => {
+          const periods = byDay.get(day);
+          const dayLabel = DAY_LABELS[day];
+          return (
+            <div key={day} className="flex items-center text-sm">
+              <span
+                className={`w-8 font-medium ${
+                  day === 0 ? 'text-red-500' : day === 6 ? 'text-blue-500' : 'text-gray-700'
+                }`}
+              >
+                {dayLabel}
+              </span>
+              {periods && periods.length > 0 ? (
+                <span className="text-gray-600">
+                  {periods
+                    .map((p) => `${p.start_time.slice(0, 5)} - ${p.end_time.slice(0, 5)}`)
+                    .join('、')}
+                </span>
+              ) : (
+                <span className="text-gray-400">定休日</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'top', label: 'トップ' },
@@ -177,6 +263,11 @@ function TopTab({ restaurant }: { restaurant: RestaurantDetail }) {
       <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
         {restaurant.description}
       </p>
+
+      {/* Business Hours */}
+      {restaurant.time_settings.length > 0 && (
+        <BusinessHours timeSettings={restaurant.time_settings} />
+      )}
 
       {/* Owner actions */}
       {isOwner && user && user.id === restaurant.user_id && (

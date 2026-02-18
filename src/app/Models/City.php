@@ -9,7 +9,7 @@ class City extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['prefecture_id', 'name'];
+    protected $fillable = ['prefecture_id', 'name', 'reading'];
 
     // どの都道府県に属しているか
     public function prefecture()

@@ -386,7 +386,7 @@ function StepTime({
       {isLoading ? (
         <Spinner className="py-12" />
       ) : (
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-4 gap-2">
           {data?.times.map(({ time, available }) => (
             <button
               key={time}
