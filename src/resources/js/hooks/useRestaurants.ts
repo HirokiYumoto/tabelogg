@@ -24,6 +24,14 @@ export function useRestaurant(id: number) {
     enabled: id > 0,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data || data.reviews_count === 0) return false;
+      if (!data.review_summary || data.review_summary.review_count !== data.reviews_count) {
+        return 5_000;
+      }
+      return false;
+    },
     placeholderData: () => {
       const queriesData = queryClient.getQueriesData<InfiniteData<CursorPaginatedResponse<Restaurant>>>({
         queryKey: ['restaurants'],

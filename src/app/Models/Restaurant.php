@@ -88,6 +88,12 @@ class Restaurant extends Model
         return $this->hasMany(Reservation::class);
     }
 
+    // チャットルーム
+    public function chatRooms()
+    {
+        return $this->hasMany(ChatRoom::class);
+    }
+
     // ★追加: 店舗は複数の「席タイプ」を持つ
     public function seatTypes()
     {

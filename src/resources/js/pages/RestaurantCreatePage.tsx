@@ -254,8 +254,9 @@ export default function RestaurantCreatePage() {
         };
       });
 
-      // Invalidate restaurant list so it refetches
+      // Invalidate related caches so they refetch
       queryClient.invalidateQueries({ queryKey: ['restaurants'] });
+      queryClient.invalidateQueries({ queryKey: ['ownedRestaurants'] });
 
       navigate(`/restaurants/${result.id}`);
     } catch (err) {

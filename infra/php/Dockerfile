@@ -7,7 +7,8 @@ ENV TZ=Asia/Tokyo
 RUN apt-get update && \
     apt-get install -y git unzip libzip-dev libicu-dev libonig-dev \
     mecab libmecab-dev python3 python3-pip python3-venv && \
-    docker-php-ext-install intl pdo_mysql zip bcmath && \
+    docker-php-ext-install intl pdo_mysql zip bcmath pcntl && \
+    pecl install redis && docker-php-ext-enable redis && \
     python3 -m venv /opt/unidic-env && \
     /opt/unidic-env/bin/pip install unidic-lite && \
     DICDIR=$(/opt/unidic-env/bin/python3 -c "import unidic_lite; print(unidic_lite.DICDIR)") && \

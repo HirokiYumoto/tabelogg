@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\OwnerController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\CityController;
+use App\Http\Controllers\Api\ChatController;
 
 /*
 |--------------------------------------------------------------------------
@@ -73,6 +74,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::patch('/profile', [ProfileController::class, 'update']);
     Route::delete('/profile', [ProfileController::class, 'destroy']);
+
+    // Chat
+    Route::get('/chat/rooms', [ChatController::class, 'rooms']);
+    Route::get('/chat/rooms/{roomId}/messages', [ChatController::class, 'messages']);
+    Route::post('/chat/rooms/{restaurantId}/messages', [ChatController::class, 'sendMessage']);
+    Route::put('/chat/rooms/{roomId}/mark-read', [ChatController::class, 'markRead']);
 
     // Owner routes
     Route::middleware('owner')->group(function () {

@@ -282,6 +282,10 @@ export default function RestaurantEditPage() {
       });
 
       const result = await updateRestaurant(restaurantId, formData);
+      queryClient.invalidateQueries({ queryKey: ['restaurant', restaurantId] });
+      queryClient.invalidateQueries({ queryKey: ['restaurants'] });
+      queryClient.invalidateQueries({ queryKey: ['ownedRestaurants'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       navigate(`/restaurants/${result.id}`);
     } catch (err) {
       if (err instanceof AxiosError && err.response?.data?.errors) {

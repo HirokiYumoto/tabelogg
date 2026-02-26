@@ -24,6 +24,7 @@ import MyPage from '@/pages/MyPage';
 import ReviewCreatePage from '@/pages/ReviewCreatePage';
 import MyReviewsPage from '@/pages/MyReviewsPage';
 import MyRestaurantsPage from '@/pages/MyRestaurantsPage';
+import ChatPage from '@/pages/ChatPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 
 const queryClient = new QueryClient({
@@ -68,6 +69,7 @@ function App() {
                 <Route path="/reservations" element={<ReservationsPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/restaurants/:id/reviews/create" element={<ReviewCreatePage />} />
+                <Route path="/chat" element={<ChatPage />} />
               </Route>
 
               {/* Owner only */}

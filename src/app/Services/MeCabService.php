@@ -5,6 +5,15 @@ namespace App\Services;
 class MeCabService
 {
     /**
+     * MeCab が正しく読めない複合語の読み補正マップ
+     * キー: MeCab が出力する誤った読み、値: 正しい読み
+     */
+    private const READING_OVERRIDES = [
+        'ぶたこつ' => 'とんこつ',
+        '拉麺' => 'らーめん',
+    ];
+
+    /**
      * MeCab で形態素解析し、読みを取得してひらがなに変換する
      * mecabrc に辞書パスが設定済みなので -d オプションは不要
      */
@@ -49,6 +58,11 @@ class MeCabService
     {
         $reading = $this->toReading($text);
         $reading = mb_strtolower($reading);
+        $reading = str_replace(
+            array_keys(self::READING_OVERRIDES),
+            array_values(self::READING_OVERRIDES),
+            $reading,
+        );
 
         return trim($reading);
     }

@@ -51,6 +51,12 @@ class User extends Authenticatable
         return $this->hasMany(Restaurant::class);
     }
 
+    // チャットルーム
+    public function chatRooms()
+    {
+        return $this->hasMany(ChatRoom::class);
+    }
+
     // 店舗オーナーかどうか判定
     public function isStoreOwner()
     {

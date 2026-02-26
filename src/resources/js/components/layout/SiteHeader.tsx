@@ -177,6 +177,27 @@ export default function SiteHeader() {
                 </Link>
               )}
 
+              {/* Chat link */}
+              <Link
+                to="/chat"
+                className="flex items-center gap-1.5 bg-gray-100 hover:bg-orange-100 text-gray-700 hover:text-orange-600 px-3 py-1.5 rounded-full transition duration-300 shadow-sm border border-gray-200 hover:border-orange-200"
+              >
+                <svg
+                  className="w-4 h-4 sm:w-5 sm:h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                  />
+                </svg>
+                <span className="text-xs sm:text-sm font-bold whitespace-nowrap">チャット</span>
+              </Link>
+
               {/* My page link */}
               <Link
                 to="/mypage"
@@ -248,6 +269,13 @@ export default function SiteHeader() {
               <div className="text-sm font-bold text-gray-700 py-2 border-b border-gray-100">
                 {user.name}さん
               </div>
+              <Link
+                to="/chat"
+                className="block py-2 text-sm text-gray-700 hover:text-orange-500 font-bold"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                チャット
+              </Link>
               <Link
                 to="/mypage"
                 className="block py-2 text-sm text-gray-700 hover:text-orange-500 font-bold"

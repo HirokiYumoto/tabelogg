@@ -25,7 +25,7 @@ export default function ReviewCreatePage() {
       queryClient.invalidateQueries({ queryKey: ['restaurant', restaurantId] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['restaurants'] });
-      navigate(`/restaurants/${restaurantId}`, { replace: true });
+      navigate(`/restaurants/${restaurantId}`, { replace: true, state: { tab: 'reviews' } });
     },
   });
 
