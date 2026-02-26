@@ -103,11 +103,6 @@ export default function ChatMessages({
                     : 'bg-gray-100 text-gray-800 rounded-bl-md'
                 }`}
               >
-                {!isMine && (
-                  <div className="text-xs font-bold text-gray-500 mb-0.5">
-                    {msg.sender_name}
-                  </div>
-                )}
                 <div>{msg.body}</div>
                 <div
                   className={`text-[10px] mt-1 ${

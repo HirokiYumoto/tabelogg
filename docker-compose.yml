@@ -49,6 +49,7 @@ services:
       - ./src:/data
     command: php /data/artisan reverb:start --host=0.0.0.0 --port=8080
     depends_on:
+      - db
       - redis
     restart: unless-stopped
 

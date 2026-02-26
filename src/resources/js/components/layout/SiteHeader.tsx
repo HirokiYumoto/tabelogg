@@ -3,11 +3,13 @@ import { useState, useEffect, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePrefectures } from '@/hooks/useRestaurants';
+import { useChatUnreadCount } from '@/hooks/useChatUnreadCount';
 import { getCities } from '@/api/restaurants';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 
 export default function SiteHeader() {
   const { user, isAdmin, logout } = useAuth();
+  const { data: unreadCount } = useChatUnreadCount(!!user);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [searchParams] = useSearchParams();
@@ -180,7 +182,7 @@ export default function SiteHeader() {
               {/* Chat link */}
               <Link
                 to="/chat"
-                className="flex items-center gap-1.5 bg-gray-100 hover:bg-orange-100 text-gray-700 hover:text-orange-600 px-3 py-1.5 rounded-full transition duration-300 shadow-sm border border-gray-200 hover:border-orange-200"
+                className="relative flex items-center gap-1.5 bg-gray-100 hover:bg-orange-100 text-gray-700 hover:text-orange-600 px-3 py-1.5 rounded-full transition duration-300 shadow-sm border border-gray-200 hover:border-orange-200"
               >
                 <svg
                   className="w-4 h-4 sm:w-5 sm:h-5"
@@ -196,6 +198,11 @@ export default function SiteHeader() {
                   />
                 </svg>
                 <span className="text-xs sm:text-sm font-bold whitespace-nowrap">チャット</span>
+                {!!unreadCount && unreadCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
               </Link>
 
               {/* My page link */}
@@ -271,10 +278,15 @@ export default function SiteHeader() {
               </div>
               <Link
                 to="/chat"
-                className="block py-2 text-sm text-gray-700 hover:text-orange-500 font-bold"
+                className="flex items-center justify-between py-2 text-sm text-gray-700 hover:text-orange-500 font-bold"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 チャット
+                {!!unreadCount && unreadCount > 0 && (
+                  <span className="bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
               </Link>
               <Link
                 to="/mypage"

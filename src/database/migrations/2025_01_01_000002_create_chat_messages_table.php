@@ -14,7 +14,7 @@ return new class extends Migration
             $table->foreignId('sender_id')->constrained('users')->cascadeOnDelete();
             $table->text('body');
             $table->boolean('is_read')->default(false);
-            $table->timestamp('created_at')->useCurrent();
+            $table->timestamp('created_at')->nullable();
 
             $table->index(['chat_room_id', 'created_at']);
             $table->index(['chat_room_id', 'is_read']);

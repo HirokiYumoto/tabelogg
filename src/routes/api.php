@@ -76,6 +76,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy']);
 
     // Chat
+    Route::get('/chat/unread-count', [ChatController::class, 'unreadCount']);
     Route::get('/chat/rooms', [ChatController::class, 'rooms']);
     Route::get('/chat/rooms/{roomId}/messages', [ChatController::class, 'messages']);
     Route::post('/chat/rooms/{restaurantId}/messages', [ChatController::class, 'sendMessage']);

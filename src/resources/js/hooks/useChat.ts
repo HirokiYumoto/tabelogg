@@ -1,13 +1,15 @@
 import { useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import * as chatApi from '@/api/chat';
-import echo from '@/lib/echo';
+import { getEcho } from '@/lib/echo';
 import type { ChatMessage } from '@/types/chat';
 
-export function useChatRooms() {
+export function useChatRooms(polling = false) {
   return useQuery({
     queryKey: ['chatRooms'],
     queryFn: chatApi.getChatRooms,
+    staleTime: 0,
+    refetchInterval: polling ? 5_000 : false,
   });
 }
 
@@ -19,6 +21,7 @@ export function useChatMessages(roomId: number | null) {
     initialPageParam: undefined as number | undefined,
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
     enabled: !!roomId,
+    staleTime: 0,
   });
 }
 
@@ -50,8 +53,9 @@ export function useSendMessage() {
           };
         }
       );
-      // ルーム一覧も更新
+      // ルーム一覧・未読数も更新
       queryClient.invalidateQueries({ queryKey: ['chatRooms'] });
+      queryClient.invalidateQueries({ queryKey: ['chatUnreadCount'] });
     },
   });
 }
@@ -62,6 +66,7 @@ export function useMarkRead(roomId: number | null) {
     mutationFn: () => chatApi.markRead(roomId!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chatRooms'] });
+      queryClient.refetchQueries({ queryKey: ['chatUnreadCount'] });
     },
   });
 }
@@ -69,7 +74,7 @@ export function useMarkRead(roomId: number | null) {
 /**
  * Echo チャンネル購読: 新着メッセージをリアルタイムで受信
  */
-export function useChatSubscription(roomId: number | null) {
+export function useChatSubscription(roomId: number | null, currentUserId?: number) {
   const queryClient = useQueryClient();
 
   const handleNewMessage = useCallback(
@@ -98,21 +103,29 @@ export function useChatSubscription(roomId: number | null) {
         }
       );
 
+      // 相手からのメッセージ → 開いているので即既読にする
+      if (roomId && currentUserId && newMessage.sender_id !== currentUserId) {
+        chatApi.markRead(roomId).then(() => {
+          queryClient.refetchQueries({ queryKey: ['chatUnreadCount'] });
+        });
+      }
+
       // ルーム一覧も更新
       queryClient.invalidateQueries({ queryKey: ['chatRooms'] });
     },
-    [roomId, queryClient]
+    [roomId, currentUserId, queryClient]
   );
 
   useEffect(() => {
     if (!roomId) return;
 
-    const channel = echo.private(`chat.room.${roomId}`);
+    const echoInstance = getEcho();
+    const channel = echoInstance.private(`chat.room.${roomId}`);
     channel.listen('.message.sent', handleNewMessage);
 
     return () => {
       channel.stopListening('.message.sent', handleNewMessage);
-      echo.leave(`chat.room.${roomId}`);
+      echoInstance.leave(`chat.room.${roomId}`);
     };
   }, [roomId, handleNewMessage]);
 }

@@ -1,5 +1,6 @@
 import '../css/app.css';
 import { createRoot } from 'react-dom/client';
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '@/contexts/AuthContext';
@@ -24,8 +25,9 @@ import MyPage from '@/pages/MyPage';
 import ReviewCreatePage from '@/pages/ReviewCreatePage';
 import MyReviewsPage from '@/pages/MyReviewsPage';
 import MyRestaurantsPage from '@/pages/MyRestaurantsPage';
-import ChatPage from '@/pages/ChatPage';
 import NotFoundPage from '@/pages/NotFoundPage';
+
+const ChatPage = lazy(() => import('@/pages/ChatPage'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -69,7 +71,7 @@ function App() {
                 <Route path="/reservations" element={<ReservationsPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/restaurants/:id/reviews/create" element={<ReviewCreatePage />} />
-                <Route path="/chat" element={<ChatPage />} />
+                <Route path="/chat" element={<Suspense fallback={null}><ChatPage /></Suspense>} />
               </Route>
 
               {/* Owner only */}

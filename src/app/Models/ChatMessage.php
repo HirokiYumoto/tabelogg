@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ChatMessage extends Model
 {
-    public $timestamps = false;
+    const UPDATED_AT = null;
 
     protected $fillable = [
         'chat_room_id',
@@ -18,7 +18,6 @@ class ChatMessage extends Model
 
     protected $casts = [
         'is_read' => 'boolean',
-        'created_at' => 'datetime',
     ];
 
     public function chatRoom(): BelongsTo

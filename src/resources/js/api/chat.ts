@@ -29,3 +29,8 @@ export async function sendMessage(
 export async function markRead(roomId: number): Promise<void> {
   await apiClient.put(`/chat/rooms/${roomId}/mark-read`);
 }
+
+export async function getUnreadCount(): Promise<number> {
+  const { data } = await apiClient.get('/chat/unread-count');
+  return data.count;
+}

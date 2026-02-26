@@ -16,6 +16,25 @@ use Illuminate\Support\Facades\DB;
 class ChatController extends Controller
 {
     /**
+     * 未読メッセージ数（軽量エンドポイント）
+     */
+    public function unreadCount()
+    {
+        $userId = Auth::id();
+
+        $roomIds = ChatRoom::where('user_id', $userId)
+            ->orWhereHas('restaurant', fn ($q) => $q->where('user_id', $userId))
+            ->pluck('id');
+
+        $count = ChatMessage::whereIn('chat_room_id', $roomIds)
+            ->where('sender_id', '!=', $userId)
+            ->where('is_read', false)
+            ->count();
+
+        return response()->json(['count' => $count]);
+    }
+
+    /**
      * チャットルーム一覧（未読数・最新メッセージ付き）
      */
     public function rooms(Request $request)
