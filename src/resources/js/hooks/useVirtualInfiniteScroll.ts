@@ -41,7 +41,7 @@ export function useVirtualInfiniteScroll<T>({
   useEffect(() => {
     if (!hasNextPage || isFetchingNextPage || rows.length === 0 || virtualItems.length === 0) return;
     const lastVirtual = virtualItems[virtualItems.length - 1];
-    if (lastVirtual && lastVirtual.index / rows.length >= prefetchThreshold) {
+    if (lastVirtual && (lastVirtual.index + 1) / rows.length >= prefetchThreshold) {
       fetchNextPage();
     }
   }, [virtualItems, rows.length, hasNextPage, isFetchingNextPage, fetchNextPage, prefetchThreshold]);
