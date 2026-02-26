@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getOwnedRestaurants } from '@/api/dashboard';
 import { deleteRestaurant } from '@/api/restaurants';
-import Spinner from '@/components/ui/Spinner';
+import { useResponsiveColumns } from '@/hooks/useResponsiveColumns';
+import VirtualGrid from '@/components/ui/VirtualGrid';
+import { OwnedRestaurantCardSkeleton } from '@/components/ui/Skeleton';
 import type { OwnedRestaurant } from '@/api/dashboard';
 
 function RestaurantCard({ r, onDestroy, destroying }: { r: OwnedRestaurant; onDestroy: (id: number, name: string) => void; destroying: boolean }) {
@@ -11,7 +12,7 @@ function RestaurantCard({ r, onDestroy, destroying }: { r: OwnedRestaurant; onDe
     <div className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition flex items-start gap-4 bg-white">
       <div className="w-20 h-20 bg-gray-100 rounded overflow-hidden flex-shrink-0 border border-gray-200">
         {r.image ? (
-          <img src={r.image} alt={r.name} className="w-full h-full object-cover" />
+          <img src={r.image} alt={r.name} loading="lazy" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-2xl bg-gray-50">
             🍜
@@ -69,7 +70,7 @@ function RestaurantCard({ r, onDestroy, destroying }: { r: OwnedRestaurant; onDe
 
 export default function MyRestaurantsPage() {
   const queryClient = useQueryClient();
-  const sentinelRef = useRef<HTMLDivElement>(null);
+  const columns = useResponsiveColumns({ md: 2, sm: 1 });
 
   const {
     data,
@@ -82,6 +83,7 @@ export default function MyRestaurantsPage() {
     queryFn: ({ pageParam }) => getOwnedRestaurants(pageParam || undefined),
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
     initialPageParam: null as string | null,
+    maxPages: 25,
   });
 
   const destroyMutation = useMutation({
@@ -97,28 +99,6 @@ export default function MyRestaurantsPage() {
     if (!window.confirm(`「${name}」を削除しますか？この操作は取り消せません。`)) return;
     destroyMutation.mutate(id);
   };
-
-  // IntersectionObserver for infinite scroll
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
-          fetchNextPage();
-        }
-      },
-      { rootMargin: '200px' },
-    );
-
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
-
-  if (isLoading) {
-    return <Spinner className="py-20" />;
-  }
 
   const restaurants = data?.pages.flatMap((page) => page.data) ?? [];
 
@@ -141,27 +121,31 @@ export default function MyRestaurantsPage() {
 
       <h1 className="text-2xl font-bold text-gray-900 mb-8">掲載店舗一覧</h1>
 
-      {restaurants.length === 0 ? (
+      {!isLoading && restaurants.length === 0 ? (
         <p className="text-gray-400 text-sm text-center py-10">登録されている店舗はありません。</p>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {restaurants.map((r) => (
+          <VirtualGrid<OwnedRestaurant>
+            items={restaurants}
+            columns={columns}
+            estimateRowHeight={120}
+            hasNextPage={hasNextPage ?? false}
+            isFetchingNextPage={isFetchingNextPage}
+            fetchNextPage={fetchNextPage}
+            renderItem={(r) => (
               <RestaurantCard
-                key={r.id}
                 r={r}
                 onDestroy={handleDestroy}
                 destroying={destroyMutation.isPending}
               />
-            ))}
-          </div>
+            )}
+            renderSkeleton={() => <OwnedRestaurantCardSkeleton />}
+            skeletonCount={4}
+            gap="gap-4"
+            isLoading={isLoading}
+          />
 
-          {/* Sentinel for infinite scroll */}
-          <div ref={sentinelRef} className="h-1" />
-
-          {isFetchingNextPage && <Spinner className="py-8" />}
-
-          {!hasNextPage && restaurants.length > 0 && (
+          {!isLoading && !hasNextPage && restaurants.length > 0 && (
             <p className="text-center text-sm text-gray-400 py-8">
               すべての掲載店舗を表示しました
             </p>

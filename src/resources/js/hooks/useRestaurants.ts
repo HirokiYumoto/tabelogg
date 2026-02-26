@@ -11,6 +11,7 @@ export function useRestaurants(params: RestaurantSearchParams) {
     initialPageParam: null as string | null,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
+    maxPages: 25,
   });
 }
 

@@ -1,11 +1,13 @@
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRestaurants } from '@/hooks/useRestaurants';
 import { useGeolocation } from '@/hooks/useGeolocation';
+import { useResponsiveColumns } from '@/hooks/useResponsiveColumns';
 import { getRestaurant } from '@/api/restaurants';
 import type { RestaurantSearchParams, Restaurant } from '@/types/restaurant';
-import Spinner from '@/components/ui/Spinner';
+import VirtualGrid from '@/components/ui/VirtualGrid';
+import { RestaurantCardSkeleton } from '@/components/ui/Skeleton';
 
 const SORT_OPTIONS = [
   { value: 'distance', label: '📍 現在地に近い' },
@@ -35,6 +37,7 @@ function RestaurantCard({ restaurant, onPrefetch }: { restaurant: Restaurant; on
           <img
             src={`/storage/${image.image_path}`}
             alt={restaurant.name}
+            loading="lazy"
             className="w-full h-full object-cover transform group-hover:scale-110 transition duration-500"
           />
         ) : (
@@ -153,7 +156,7 @@ function RestaurantCard({ restaurant, onPrefetch }: { restaurant: Restaurant; on
 export default function HomePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
-  const sentinelRef = useRef<HTMLDivElement>(null);
+  const columns = useResponsiveColumns({ lg: 3, md: 2, sm: 1 });
 
   const keyword = searchParams.get('keyword') ?? '';
   const prefectureId = searchParams.get('prefecture_id') ?? '';
@@ -205,24 +208,6 @@ export default function HomePage() {
   const restaurants = data?.pages.flatMap((page) => page.data) ?? [];
 
   const hasSearchFilter = keyword || prefectureId || cityId;
-
-  // IntersectionObserver for infinite scroll
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
-          fetchNextPage();
-        }
-      },
-      { rootMargin: '200px' },
-    );
-
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // Scroll to top when filters/sort change
   useEffect(() => {
@@ -279,9 +264,6 @@ export default function HomePage() {
         </p>
       )}
 
-      {/* Loading (initial) */}
-      {isLoading && <Spinner className="py-20" />}
-
       {/* Error */}
       {isError && (
         <div className="text-center py-20 text-red-500">
@@ -296,23 +278,27 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Restaurant grid */}
-      {!isLoading && !isError && restaurants.length > 0 && (
+      {/* Restaurant grid (virtual) */}
+      {(isLoading || (!isError && restaurants.length > 0)) && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {restaurants.map((restaurant) => (
-              <RestaurantCard key={restaurant.id} restaurant={restaurant} onPrefetch={handlePrefetch} />
-            ))}
-          </div>
-
-          {/* Sentinel for infinite scroll */}
-          <div ref={sentinelRef} className="h-1" />
-
-          {/* Loading more */}
-          {isFetchingNextPage && <Spinner className="py-8" />}
+          <VirtualGrid<Restaurant>
+            items={restaurants}
+            columns={columns}
+            estimateRowHeight={380}
+            hasNextPage={hasNextPage ?? false}
+            isFetchingNextPage={isFetchingNextPage}
+            fetchNextPage={fetchNextPage}
+            renderItem={(restaurant) => (
+              <RestaurantCard restaurant={restaurant} onPrefetch={handlePrefetch} />
+            )}
+            renderSkeleton={() => <RestaurantCardSkeleton />}
+            skeletonCount={6}
+            gap="gap-8"
+            isLoading={isLoading}
+          />
 
           {/* All loaded */}
-          {!hasNextPage && (
+          {!isLoading && !hasNextPage && (
             <p className="text-center text-sm text-gray-400 py-8">
               すべての店舗を表示しました
             </p>
