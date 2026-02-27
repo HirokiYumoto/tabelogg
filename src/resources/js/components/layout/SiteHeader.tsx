@@ -4,12 +4,23 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePrefectures } from '@/hooks/useRestaurants';
 import { useChatUnreadCount } from '@/hooks/useChatUnreadCount';
+import { useGlobalChatSubscription } from '@/hooks/useChat';
+import { setupReconnectionDetection } from '@/lib/echo';
 import { getCities } from '@/api/restaurants';
 import SearchableSelect from '@/components/ui/SearchableSelect';
 
 export default function SiteHeader() {
   const { user, isAdmin, logout } = useAuth();
   const { data: unreadCount } = useChatUnreadCount(!!user);
+  useGlobalChatSubscription(user?.id ?? null);
+
+  // Initialize WebSocket reconnection detection once when user is logged in
+  useEffect(() => {
+    if (user) {
+      setupReconnectionDetection();
+    }
+  }, [user]);
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [searchParams] = useSearchParams();

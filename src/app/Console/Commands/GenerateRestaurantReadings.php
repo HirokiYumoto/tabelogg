@@ -1,11 +1,11 @@
 <?php
-
+//本ファイルの空間名
 namespace App\Console\Commands;
-
+//クラス名を省略しつつ、名前の重複を避けるための宣言。このクラス内では名前空間の末部のみの宣言で済む。
 use App\Models\Restaurant;
 use App\Services\MeCabService;
 use Illuminate\Console\Command;
-
+//コマンドクラスを継承してオリジナルコマンドを作成
 class GenerateRestaurantReadings extends Command
 {
     protected $signature = 'restaurants:generate-readings

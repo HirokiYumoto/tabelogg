@@ -22,6 +22,7 @@ class ChatRoomResource extends JsonResource
             ],
             'latest_message' => $this->whenLoaded('latestMessage', fn () => [
                 'id' => $this->latestMessage->id,
+                'type' => $this->latestMessage->type ?? 'text',
                 'body' => $this->latestMessage->body,
                 'sender_id' => $this->latestMessage->sender_id,
                 'created_at' => $this->latestMessage->created_at?->toISOString(),

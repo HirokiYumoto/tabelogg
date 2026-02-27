@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ChatMessage extends Model
 {
@@ -12,6 +13,7 @@ class ChatMessage extends Model
     protected $fillable = [
         'chat_room_id',
         'sender_id',
+        'type',
         'body',
         'is_read',
     ];
@@ -28,5 +30,15 @@ class ChatMessage extends Model
     public function sender(): BelongsTo
     {
         return $this->belongsTo(User::class, 'sender_id');
+    }
+
+    public function images(): HasMany
+    {
+        return $this->hasMany(ChatMessageImage::class);
+    }
+
+    public function deletions(): HasMany
+    {
+        return $this->hasMany(ChatMessageDeletion::class);
     }
 }

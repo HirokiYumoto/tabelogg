@@ -1,10 +1,24 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { useChatRooms, useChatMessages, useSendMessage, useMarkRead, useChatSubscription } from '@/hooks/useChat';
+import {
+  useChatRooms,
+  useChatMessages,
+  useSendMessage,
+  useSendImageMessage,
+  useMarkRead,
+  useChatSubscription,
+  useHideMessage,
+  useHideRoom,
+  useBlockUser,
+  useUnblockUser,
+  useBlockStatus,
+  useReport,
+} from '@/hooks/useChat';
 import ChatRoomList from '@/components/chat/ChatRoomList';
 import ChatMessages from '@/components/chat/ChatMessages';
 import ChatInput from '@/components/chat/ChatInput';
+import ReportModal from '@/components/chat/ReportModal';
 import Spinner from '@/components/ui/Spinner';
 import type { ChatRoom } from '@/types/chat';
 
@@ -25,8 +39,20 @@ export default function ChatPage() {
   const [newChatRestaurantId, setNewChatRestaurantId] = useState<number | null>(null);
   // オーナー用: 選択中の店舗ID
   const [selectedRestaurantId, setSelectedRestaurantId] = useState<number | null>(null);
+  // 通報モーダル
+  const [reportTarget, setReportTarget] = useState<{ type: string; id: number } | null>(null);
 
   const { data: rooms, isLoading: roomsLoading, refetch: refetchRooms } = useChatRooms(true);
+
+  // 相手のユーザーID（ブロック状態確認用）
+  const otherUserId = useMemo(() => {
+    if (!selectedRoom || !user) return null;
+    return selectedRoom.user.id === user.id
+      ? null // ユーザー側 → 相手はオーナー（restaurant.user_idは取得できないのでnull）
+      : selectedRoom.user.id; // オーナー側 → 相手はuser
+  }, [selectedRoom, user]);
+
+  const { data: blockStatus } = useBlockStatus(otherUserId);
 
   // オーナー用: 店舗ごとにルームをグループ化
   const restaurantGroups = useMemo<RestaurantGroup[]>(() => {
@@ -69,7 +95,13 @@ export default function ChatPage() {
   } = useChatMessages(selectedRoom?.id ?? null);
 
   const sendMutation = useSendMessage();
+  const sendImageMutation = useSendImageMessage();
   const markReadMutation = useMarkRead(selectedRoom?.id ?? null);
+  const hideMessageMutation = useHideMessage();
+  const hideRoomMutation = useHideRoom();
+  const blockMutation = useBlockUser();
+  const unblockMutation = useUnblockUser();
+  const reportMutation = useReport();
 
   // Echo でリアルタイム受信（相手からの新着を即既読にする）
   useChatSubscription(selectedRoom?.id ?? null, user?.id);
@@ -113,7 +145,17 @@ export default function ChatPage() {
     }
   }, [selectedRoom?.id]);
 
-  const allMessages = messagesData?.pages.flatMap((page) => page.data) ?? [];
+  // メッセージの重複排除（楽観的更新 + WebSocketイベントの競合対策）
+  const allMessages = useMemo(() => {
+    const raw = messagesData?.pages.flatMap((page) => page.data) ?? [];
+    const seen = new Set<number>();
+    return raw.filter((msg) => {
+      const id = Number(msg.id);
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  }, [messagesData]);
 
   const handleSelectRoom = useCallback((room: ChatRoom) => {
     setSelectedRoom(room);
@@ -126,22 +168,13 @@ export default function ChatPage() {
       if (!user) return;
 
       if (selectedRoom) {
-        // 既存ルームへの送信
         const isOwner = selectedRoom.user.id !== user.id;
-        sendMutation.mutate(
-          {
-            restaurantId: selectedRoom.restaurant.id,
-            body,
-            roomId: isOwner ? selectedRoom.id : undefined,
-          },
-          {
-            onSuccess: () => {
-              refetchRooms();
-            },
-          }
-        );
+        sendMutation.mutate({
+          restaurantId: selectedRoom.restaurant.id,
+          body,
+          roomId: isOwner ? selectedRoom.id : undefined,
+        });
       } else if (newChatRestaurantId) {
-        // 新規ルーム作成（初回メッセージ送信）
         sendMutation.mutate(
           {
             restaurantId: newChatRestaurantId,
@@ -150,7 +183,6 @@ export default function ChatPage() {
           {
             onSuccess: (newMessage) => {
               setNewChatRestaurantId(null);
-              // ルーム一覧を再取得して、新しいルームを選択
               refetchRooms().then(({ data: updatedRooms }) => {
                 const newRoom = updatedRooms?.find(
                   (r) => r.id === newMessage.chat_room_id
@@ -168,14 +200,107 @@ export default function ChatPage() {
     [selectedRoom, user, sendMutation, newChatRestaurantId, refetchRooms, setSearchParams]
   );
 
+  const handleSendImages = useCallback(
+    (images: File[]) => {
+      if (!user) return;
+
+      const restaurantId = selectedRoom?.restaurant.id ?? newChatRestaurantId;
+      if (!restaurantId) return;
+
+      const isOwnerSending = selectedRoom ? selectedRoom.user.id !== user.id : false;
+
+      sendImageMutation.mutate(
+        {
+          restaurantId,
+          images,
+          roomId: isOwnerSending && selectedRoom ? selectedRoom.id : undefined,
+        },
+        {
+          onSuccess: (newMessage) => {
+            if (newChatRestaurantId) {
+              setNewChatRestaurantId(null);
+              refetchRooms().then(({ data: updatedRooms }) => {
+                const newRoom = updatedRooms?.find(
+                  (r) => r.id === newMessage.chat_room_id
+                );
+                if (newRoom) {
+                  setSelectedRoom(newRoom);
+                  setSearchParams({ room: String(newRoom.id) });
+                }
+              });
+            }
+          },
+        }
+      );
+    },
+    [selectedRoom, user, sendImageMutation, newChatRestaurantId, refetchRooms, setSearchParams]
+  );
+
+  const handleHideMessage = useCallback(
+    (messageId: number) => {
+      if (!confirm('このメッセージを削除しますか？（自分の画面からのみ削除されます）')) return;
+      hideMessageMutation.mutate(messageId);
+    },
+    [hideMessageMutation]
+  );
+
+  const handleHideRoom = useCallback(
+    (roomId: number) => {
+      if (!confirm('このチャットを削除しますか？（自分の画面からのみ削除されます）')) return;
+      hideRoomMutation.mutate(roomId, {
+        onSuccess: () => {
+          if (selectedRoom?.id === roomId) {
+            setSelectedRoom(null);
+            setMobileView('list');
+          }
+        },
+      });
+    },
+    [hideRoomMutation, selectedRoom]
+  );
+
+  const handleBlock = useCallback(() => {
+    if (!otherUserId) return;
+    if (blockStatus?.blocking) {
+      if (!confirm('ブロックを解除しますか？')) return;
+      unblockMutation.mutate(otherUserId);
+    } else {
+      if (!confirm('このユーザーをブロックしますか？\nブロックするとメッセージの送受信ができなくなります。')) return;
+      blockMutation.mutate(otherUserId);
+    }
+  }, [otherUserId, blockStatus, blockMutation, unblockMutation]);
+
+  const handleReportUser = useCallback(() => {
+    if (!otherUserId) return;
+    setReportTarget({ type: 'user', id: otherUserId });
+  }, [otherUserId]);
+
+  const handleReportMessage = useCallback((messageId: number) => {
+    setReportTarget({ type: 'chat_message', id: messageId });
+  }, []);
+
+  const handleReportSubmit = useCallback(
+    (reason: string) => {
+      if (!reportTarget) return;
+      reportMutation.mutate(
+        { targetType: reportTarget.type, targetId: reportTarget.id, reason },
+        {
+          onSuccess: () => {
+            setReportTarget(null);
+            alert('通報を受け付けました。');
+          },
+        }
+      );
+    },
+    [reportTarget, reportMutation]
+  );
+
   const handleBack = useCallback(() => {
     if (isOwner && selectedRoom && !selectedRestaurantId) {
-      // オーナーがチャットから戻る → 店舗一覧へ
       setMobileView('list');
       setSelectedRoom(null);
       setNewChatRestaurantId(null);
     } else if (isOwner && selectedRestaurantId && mobileView === 'chat') {
-      // オーナーがチャットから戻る → ルーム一覧へ
       setMobileView('list');
       setSelectedRoom(null);
       setNewChatRestaurantId(null);
@@ -286,6 +411,7 @@ export default function ChatPage() {
                   selectedRoomId={selectedRoom?.id ?? null}
                   onSelect={handleSelectRoom}
                   currentUserId={user.id}
+                  onHideRoom={handleHideRoom}
                 />
               </div>
             </>
@@ -324,7 +450,7 @@ export default function ChatPage() {
                     </span>
                   )}
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="font-bold text-sm text-gray-800 truncate">
                     {selectedRoom.user.id === user.id
                       ? selectedRoom.restaurant.name
@@ -334,7 +460,43 @@ export default function ChatPage() {
                     {selectedRoom.restaurant.name}
                   </div>
                 </div>
+
+                {/* ヘッダーアクション: ブロック・通報 */}
+                {otherUserId && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={handleBlock}
+                      className={`text-xs px-2 py-1 rounded-lg transition ${
+                        blockStatus?.blocking
+                          ? 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                          : 'text-gray-500 hover:bg-gray-100'
+                      }`}
+                    >
+                      {blockStatus?.blocking ? 'ブロック中' : 'ブロック'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleReportUser}
+                      className="text-xs text-gray-500 hover:bg-gray-100 px-2 py-1 rounded-lg transition"
+                    >
+                      通報
+                    </button>
+                  </div>
+                )}
               </div>
+
+              {/* ブロック通知 */}
+              {blockStatus?.blocked_by && (
+                <div className="px-4 py-2 bg-red-50 text-red-600 text-xs text-center">
+                  相手にブロックされているため、メッセージを送信できません。
+                </div>
+              )}
+              {blockStatus?.blocking && !blockStatus?.blocked_by && (
+                <div className="px-4 py-2 bg-gray-50 text-gray-500 text-xs text-center">
+                  ブロック中のため、メッセージを送信できません。
+                </div>
+              )}
 
               {/* メッセージ */}
               <ChatMessages
@@ -344,10 +506,21 @@ export default function ChatPage() {
                 hasMore={!!hasNextPage}
                 onLoadMore={() => fetchNextPage()}
                 isFetchingMore={isFetchingNextPage}
+                onHideMessage={handleHideMessage}
+                onReportMessage={handleReportMessage}
               />
 
               {/* 入力 */}
-              <ChatInput onSend={handleSend} disabled={sendMutation.isPending} />
+              <ChatInput
+                onSend={handleSend}
+                onSendImages={handleSendImages}
+                disabled={
+                  sendMutation.isPending ||
+                  sendImageMutation.isPending ||
+                  !!blockStatus?.blocking ||
+                  !!blockStatus?.blocked_by
+                }
+              />
             </>
           ) : newChatRestaurantId ? (
             <>
@@ -371,7 +544,11 @@ export default function ChatPage() {
               </div>
 
               {/* 入力 */}
-              <ChatInput onSend={handleSend} disabled={sendMutation.isPending} />
+              <ChatInput
+                onSend={handleSend}
+                onSendImages={handleSendImages}
+                disabled={sendMutation.isPending || sendImageMutation.isPending}
+              />
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-gray-400">
@@ -385,6 +562,17 @@ export default function ChatPage() {
           )}
         </div>
       </div>
+
+      {/* 通報モーダル */}
+      {reportTarget && (
+        <ReportModal
+          targetType={reportTarget.type}
+          targetId={reportTarget.id}
+          onSubmit={handleReportSubmit}
+          onClose={() => setReportTarget(null)}
+          isSubmitting={reportMutation.isPending}
+        />
+      )}
     </div>
   );
 }

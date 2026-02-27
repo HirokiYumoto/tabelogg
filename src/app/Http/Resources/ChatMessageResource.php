@@ -14,7 +14,14 @@ class ChatMessageResource extends JsonResource
             'chat_room_id' => $this->chat_room_id,
             'sender_id' => $this->sender_id,
             'sender_name' => $this->whenLoaded('sender', fn () => $this->sender->name),
+            'type' => $this->type ?? 'text',
             'body' => $this->body,
+            'images' => $this->whenLoaded('images', fn () =>
+                $this->images->map(fn ($img) => [
+                    'id' => $img->id,
+                    'url' => '/storage/' . $img->image_path,
+                ])
+            ),
             'is_read' => $this->is_read,
             'created_at' => $this->created_at?->toISOString(),
         ];

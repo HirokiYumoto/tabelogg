@@ -6,7 +6,8 @@ export function useChatUnreadCount(enabled: boolean) {
     queryKey: ['chatUnreadCount'],
     queryFn: getUnreadCount,
     staleTime: 0,
-    refetchInterval: 3_000,
+    // WebSocket + 再接続キャッチアップが主、ポーリングはフォールバック
+    refetchInterval: 60_000,
     enabled,
   });
 }

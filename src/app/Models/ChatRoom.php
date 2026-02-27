@@ -33,4 +33,9 @@ class ChatRoom extends Model
     {
         return $this->hasOne(ChatMessage::class)->latestOfMany();
     }
+
+    public function deletions(): HasMany
+    {
+        return $this->hasMany(ChatRoomDeletion::class);
+    }
 }

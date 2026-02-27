@@ -14,6 +14,8 @@ use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\CityController;
 use App\Http\Controllers\Api\ChatController;
+use App\Http\Controllers\Api\BlockController;
+use App\Http\Controllers\Api\ReportController;
 
 /*
 |--------------------------------------------------------------------------
@@ -81,6 +83,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/chat/rooms/{roomId}/messages', [ChatController::class, 'messages']);
     Route::post('/chat/rooms/{restaurantId}/messages', [ChatController::class, 'sendMessage']);
     Route::put('/chat/rooms/{roomId}/mark-read', [ChatController::class, 'markRead']);
+    Route::post('/chat/messages/{messageId}/hide', [ChatController::class, 'hideMessage']);
+    Route::post('/chat/rooms/{roomId}/hide', [ChatController::class, 'hideRoom']);
+
+    // Block
+    Route::get('/users/{userId}/block-status', [BlockController::class, 'status']);
+    Route::post('/users/{userId}/block', [BlockController::class, 'store']);
+    Route::delete('/users/{userId}/block', [BlockController::class, 'destroy']);
+
+    // Report
+    Route::post('/reports', [ReportController::class, 'store']);
 
     // Owner routes
     Route::middleware('owner')->group(function () {
