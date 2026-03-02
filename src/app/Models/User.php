@@ -51,6 +51,24 @@ class User extends Authenticatable
         return $this->hasMany(Restaurant::class);
     }
 
+    // チャットルーム
+    public function chatRooms()
+    {
+        return $this->hasMany(ChatRoom::class);
+    }
+
+    // ブロックしたユーザー
+    public function blocks()
+    {
+        return $this->hasMany(UserBlock::class, 'blocker_id');
+    }
+
+    // ブロックされたユーザー（自分をブロックしている）
+    public function blockedBy()
+    {
+        return $this->hasMany(UserBlock::class, 'blocked_id');
+    }
+
     // 店舗オーナーかどうか判定
     public function isStoreOwner()
     {

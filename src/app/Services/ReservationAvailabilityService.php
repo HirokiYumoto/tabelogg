@@ -15,7 +15,7 @@ class ReservationAvailabilityService
      */
     public function getAvailableDates(Restaurant $restaurant, int $people, int $year, int $month): array
     {
-        $timeSettings = $restaurant->timeSettings->groupBy('day_of_week');
+        $timeSettings = $this->expandEveryDay($restaurant->timeSettings)->groupBy('day_of_week');
         if ($timeSettings->isEmpty()) {
             return [];
         }
@@ -126,7 +126,7 @@ class ReservationAvailabilityService
         $dateObj = Carbon::parse($date);
         $dayOfWeek = $dateObj->dayOfWeek;
 
-        $settings = $restaurant->timeSettings->where('day_of_week', $dayOfWeek);
+        $settings = $this->expandEveryDay($restaurant->timeSettings)->where('day_of_week', $dayOfWeek);
         if ($settings->isEmpty()) {
             return [];
         }
@@ -233,7 +233,7 @@ class ReservationAvailabilityService
         $dateObj = Carbon::parse($date);
         $dayOfWeek = $dateObj->dayOfWeek;
 
-        $setting = $restaurant->timeSettings
+        $setting = $this->expandEveryDay($restaurant->timeSettings)
             ->where('day_of_week', $dayOfWeek)
             ->filter(function ($s) use ($time) {
                 $start = substr($s->start_time, 0, 5);
@@ -254,6 +254,7 @@ class ReservationAvailabilityService
             ->where('end_at', '>', $startDT)
             ->get(['restaurant_seat_type_id', 'number_of_people']);
 
+        $stayMinutes = $setting->stay_minutes;
         $result = [];
 
         // カウンター判定
@@ -293,7 +294,27 @@ class ReservationAvailabilityService
             }
         }
 
-        return $result;
+        return ['seats' => $result, 'stay_minutes' => $stayMinutes];
+    }
+
+    /**
+     * day_of_week=7（毎日）のレコードを0〜6に展開する
+     */
+    private function expandEveryDay(Collection $timeSettings): Collection
+    {
+        $expanded = collect();
+        foreach ($timeSettings as $ts) {
+            if ($ts->day_of_week === 7) {
+                for ($d = 0; $d <= 6; $d++) {
+                    $clone = clone $ts;
+                    $clone->day_of_week = $d;
+                    $expanded->push($clone);
+                }
+            } else {
+                $expanded->push($ts);
+            }
+        }
+        return $expanded;
     }
 
     /**

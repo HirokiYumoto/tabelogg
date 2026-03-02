@@ -16,9 +16,10 @@ class OwnerMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // ログインしていない、または role_id が 2 (店舗代表者) でない場合は弾く
-        // ※必要であれば管理者の role_id 3 も許可に含めてOK (例: ... || Auth::user()->role_id === 3)
         if (!Auth::check() || Auth::user()->role_id !== 2) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => '店舗代表者の権限がありません。'], 403);
+            }
             abort(403, '店舗代表者の権限がありません。');
         }
 

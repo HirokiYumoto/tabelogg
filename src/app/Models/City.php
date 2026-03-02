@@ -7,7 +7,9 @@ use Illuminate\Database\Eloquent\Model;
 
 class City extends Model
 {
-    use HasFactory; // ★ここを追加
+    use HasFactory;
+
+    protected $fillable = ['prefecture_id', 'name', 'reading'];
 
     // どの都道府県に属しているか
     public function prefecture()

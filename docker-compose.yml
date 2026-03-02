@@ -1,8 +1,12 @@
 services:
   app:
     build: ./infra/php
+    ports:
+      - 5173:5173
     volumes:
       - ./src:/data
+    depends_on:
+      - redis
   web:
     image: nginx:1.20-alpine
     ports:
@@ -13,6 +17,7 @@ services:
     working_dir: /data
     depends_on:
       - app
+      - reverb
   db:
     build: ./infra/mysql
     volumes:
@@ -20,7 +25,34 @@ services:
     ports:
       - 3306:3306
 
-  # ★★★ ここを追加します ★★★
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-store:/data
+    restart: unless-stopped
+
+  queue:
+    build: ./infra/php
+    volumes:
+      - ./src:/data
+    command: php /data/artisan queue:work --sleep=3 --tries=3 --timeout=180
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+
+  reverb:
+    build: ./infra/php
+    volumes:
+      - ./src:/data
+    command: php /data/artisan reverb:start --host=0.0.0.0 --port=8080
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+
   meilisearch:
     image: getmeili/meilisearch:v1.13
     ports:
@@ -33,3 +65,4 @@ services:
 volumes:
   db-store:
   meili_data:
+  redis-store:
