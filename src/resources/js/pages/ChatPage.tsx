@@ -4,17 +4,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   useChatRooms,
   useChatMessages,
-  useSendMessage,
-  useSendImageMessage,
   useMarkRead,
   useChatSubscription,
-  useHideMessage,
-  useHideRoom,
-  useBlockUser,
-  useUnblockUser,
-  useBlockStatus,
-  useReport,
 } from '@/hooks/useChat';
+import { useChatPageActions } from '@/hooks/useChatPageActions';
 import ChatRoomList from '@/components/chat/ChatRoomList';
 import ChatMessages from '@/components/chat/ChatMessages';
 import ChatInput from '@/components/chat/ChatInput';
@@ -32,29 +25,19 @@ interface RestaurantGroup {
 
 export default function ChatPage() {
   const { user, isOwner } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [selectedRoom, setSelectedRoom] = useState<ChatRoom | null>(null);
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
-  // 新規チャット用（まだルームが存在しない場合）
   const [newChatRestaurantId, setNewChatRestaurantId] = useState<number | null>(null);
-  // オーナー用: 選択中の店舗ID
   const [selectedRestaurantId, setSelectedRestaurantId] = useState<number | null>(null);
-  // 通報モーダル
-  const [reportTarget, setReportTarget] = useState<{ type: string; id: number } | null>(null);
 
   const { data: rooms, isLoading: roomsLoading, refetch: refetchRooms } = useChatRooms(true);
 
-  // 相手のユーザーID（ブロック状態確認用）
   const otherUserId = useMemo(() => {
     if (!selectedRoom || !user) return null;
-    return selectedRoom.user.id === user.id
-      ? null // ユーザー側 → 相手はオーナー（restaurant.user_idは取得できないのでnull）
-      : selectedRoom.user.id; // オーナー側 → 相手はuser
+    return selectedRoom.user.id === user.id ? null : selectedRoom.user.id;
   }, [selectedRoom, user]);
 
-  const { data: blockStatus } = useBlockStatus(otherUserId);
-
-  // オーナー用: 店舗ごとにルームをグループ化
   const restaurantGroups = useMemo<RestaurantGroup[]>(() => {
     if (!isOwner || !rooms) return [];
     const map = new Map<number, RestaurantGroup>();
@@ -77,7 +60,6 @@ export default function ChatPage() {
     return Array.from(map.values());
   }, [isOwner, rooms]);
 
-  // オーナー用: 選択中の店舗のルームだけ抽出
   const filteredRooms = useMemo(() => {
     if (!rooms) return [];
     if (isOwner && selectedRestaurantId) {
@@ -94,17 +76,39 @@ export default function ChatPage() {
     isFetchingNextPage,
   } = useChatMessages(selectedRoom?.id ?? null);
 
-  const sendMutation = useSendMessage();
-  const sendImageMutation = useSendImageMessage();
   const markReadMutation = useMarkRead(selectedRoom?.id ?? null);
-  const hideMessageMutation = useHideMessage();
-  const hideRoomMutation = useHideRoom();
-  const blockMutation = useBlockUser();
-  const unblockMutation = useUnblockUser();
-  const reportMutation = useReport();
 
-  // Echo でリアルタイム受信（相手からの新着を即既読にする）
   useChatSubscription(selectedRoom?.id ?? null, user?.id);
+
+  const {
+    sendMutation,
+    sendImageMutation,
+    blockStatus,
+    reportTarget,
+    reportMutation,
+    setReportTarget,
+    handleSend,
+    handleSendImages,
+    handleHideMessage,
+    handleHideRoom,
+    handleBlock,
+    handleReportUser,
+    handleReportMessage,
+    handleReportSubmit,
+    handleBack,
+  } = useChatPageActions({
+    selectedRoom,
+    setSelectedRoom,
+    newChatRestaurantId,
+    setNewChatRestaurantId,
+    setMobileView,
+    refetchRooms,
+    currentUserId: user?.id,
+    otherUserId,
+    isOwner,
+    selectedRestaurantId,
+    mobileView,
+  });
 
   // URL パラメータから初期ルームを選択
   useEffect(() => {
@@ -121,7 +125,6 @@ export default function ChatPage() {
       }
     }
 
-    // ?restaurant=123 の場合：既存ルームがあればそれを選択、なければ新規チャットモード
     const restaurantParam = searchParams.get('restaurant');
     if (restaurantParam) {
       const restaurantId = Number(restaurantParam);
@@ -136,16 +139,14 @@ export default function ChatPage() {
         setMobileView('chat');
       }
     }
-  }, [rooms, searchParams]);
+  }, [rooms, searchParams, isOwner]);
 
-  // ルーム選択時に既読処理
   useEffect(() => {
     if (selectedRoom && selectedRoom.unread_count > 0) {
       markReadMutation.mutate();
     }
   }, [selectedRoom?.id]);
 
-  // メッセージの重複排除（楽観的更新 + WebSocketイベントの競合対策）
   const allMessages = useMemo(() => {
     const raw = messagesData?.pages.flatMap((page) => page.data) ?? [];
     const seen = new Set<number>();
@@ -162,153 +163,6 @@ export default function ChatPage() {
     setNewChatRestaurantId(null);
     setMobileView('chat');
   }, []);
-
-  const handleSend = useCallback(
-    (body: string) => {
-      if (!user) return;
-
-      if (selectedRoom) {
-        const isOwner = selectedRoom.user.id !== user.id;
-        sendMutation.mutate({
-          restaurantId: selectedRoom.restaurant.id,
-          body,
-          roomId: isOwner ? selectedRoom.id : undefined,
-        });
-      } else if (newChatRestaurantId) {
-        sendMutation.mutate(
-          {
-            restaurantId: newChatRestaurantId,
-            body,
-          },
-          {
-            onSuccess: (newMessage) => {
-              setNewChatRestaurantId(null);
-              refetchRooms().then(({ data: updatedRooms }) => {
-                const newRoom = updatedRooms?.find(
-                  (r) => r.id === newMessage.chat_room_id
-                );
-                if (newRoom) {
-                  setSelectedRoom(newRoom);
-                  setSearchParams({ room: String(newRoom.id) });
-                }
-              });
-            },
-          }
-        );
-      }
-    },
-    [selectedRoom, user, sendMutation, newChatRestaurantId, refetchRooms, setSearchParams]
-  );
-
-  const handleSendImages = useCallback(
-    (images: File[]) => {
-      if (!user) return;
-
-      const restaurantId = selectedRoom?.restaurant.id ?? newChatRestaurantId;
-      if (!restaurantId) return;
-
-      const isOwnerSending = selectedRoom ? selectedRoom.user.id !== user.id : false;
-
-      sendImageMutation.mutate(
-        {
-          restaurantId,
-          images,
-          roomId: isOwnerSending && selectedRoom ? selectedRoom.id : undefined,
-        },
-        {
-          onSuccess: (newMessage) => {
-            if (newChatRestaurantId) {
-              setNewChatRestaurantId(null);
-              refetchRooms().then(({ data: updatedRooms }) => {
-                const newRoom = updatedRooms?.find(
-                  (r) => r.id === newMessage.chat_room_id
-                );
-                if (newRoom) {
-                  setSelectedRoom(newRoom);
-                  setSearchParams({ room: String(newRoom.id) });
-                }
-              });
-            }
-          },
-        }
-      );
-    },
-    [selectedRoom, user, sendImageMutation, newChatRestaurantId, refetchRooms, setSearchParams]
-  );
-
-  const handleHideMessage = useCallback(
-    (messageId: number) => {
-      if (!confirm('このメッセージを削除しますか？（自分の画面からのみ削除されます）')) return;
-      hideMessageMutation.mutate(messageId);
-    },
-    [hideMessageMutation]
-  );
-
-  const handleHideRoom = useCallback(
-    (roomId: number) => {
-      if (!confirm('このチャットを削除しますか？（自分の画面からのみ削除されます）')) return;
-      hideRoomMutation.mutate(roomId, {
-        onSuccess: () => {
-          if (selectedRoom?.id === roomId) {
-            setSelectedRoom(null);
-            setMobileView('list');
-          }
-        },
-      });
-    },
-    [hideRoomMutation, selectedRoom]
-  );
-
-  const handleBlock = useCallback(() => {
-    if (!otherUserId) return;
-    if (blockStatus?.blocking) {
-      if (!confirm('ブロックを解除しますか？')) return;
-      unblockMutation.mutate(otherUserId);
-    } else {
-      if (!confirm('このユーザーをブロックしますか？\nブロックするとメッセージの送受信ができなくなります。')) return;
-      blockMutation.mutate(otherUserId);
-    }
-  }, [otherUserId, blockStatus, blockMutation, unblockMutation]);
-
-  const handleReportUser = useCallback(() => {
-    if (!otherUserId) return;
-    setReportTarget({ type: 'user', id: otherUserId });
-  }, [otherUserId]);
-
-  const handleReportMessage = useCallback((messageId: number) => {
-    setReportTarget({ type: 'chat_message', id: messageId });
-  }, []);
-
-  const handleReportSubmit = useCallback(
-    (reason: string) => {
-      if (!reportTarget) return;
-      reportMutation.mutate(
-        { targetType: reportTarget.type, targetId: reportTarget.id, reason },
-        {
-          onSuccess: () => {
-            setReportTarget(null);
-            alert('通報を受け付けました。');
-          },
-        }
-      );
-    },
-    [reportTarget, reportMutation]
-  );
-
-  const handleBack = useCallback(() => {
-    if (isOwner && selectedRoom && !selectedRestaurantId) {
-      setMobileView('list');
-      setSelectedRoom(null);
-      setNewChatRestaurantId(null);
-    } else if (isOwner && selectedRestaurantId && mobileView === 'chat') {
-      setMobileView('list');
-      setSelectedRoom(null);
-      setNewChatRestaurantId(null);
-    } else {
-      setMobileView('list');
-      setNewChatRestaurantId(null);
-    }
-  }, [isOwner, selectedRoom, selectedRestaurantId, mobileView]);
 
   const handleBackToRestaurants = useCallback(() => {
     setSelectedRestaurantId(null);
@@ -333,7 +187,6 @@ export default function ChatPage() {
         >
           {isOwner && !selectedRestaurantId ? (
             <>
-              {/* オーナー: 店舗一覧 */}
               <div className="p-4 border-b border-gray-200 bg-gray-50">
                 <h2 className="font-bold text-lg text-gray-800">チャット</h2>
               </div>
@@ -353,15 +206,9 @@ export default function ChatPage() {
                       >
                         <div className="w-10 h-10 bg-gray-200 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden">
                           {rg.image ? (
-                            <img
-                              src={`/storage/${rg.image}`}
-                              alt=""
-                              className="w-full h-full object-cover"
-                            />
+                            <img src={`/storage/${rg.image}`} alt="" className="w-full h-full object-cover" />
                           ) : (
-                            <span className="text-gray-400 text-sm font-bold">
-                              {rg.name.charAt(0)}
-                            </span>
+                            <span className="text-gray-400 text-sm font-bold">{rg.name.charAt(0)}</span>
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -386,14 +233,9 @@ export default function ChatPage() {
             </>
           ) : (
             <>
-              {/* ルーム一覧（一般ユーザー or オーナーが店舗選択後） */}
               <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center gap-2">
                 {isOwner && selectedRestaurantId && (
-                  <button
-                    type="button"
-                    onClick={handleBackToRestaurants}
-                    className="text-gray-500 hover:text-gray-700"
-                  >
+                  <button type="button" onClick={handleBackToRestaurants} className="text-gray-500 hover:text-gray-700">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                     </svg>
@@ -426,42 +268,26 @@ export default function ChatPage() {
         >
           {selectedRoom ? (
             <>
-              {/* ヘッダー */}
               <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={handleBack}
-                  className="md:hidden text-gray-500 hover:text-gray-700"
-                >
+                <button type="button" onClick={handleBack} className="md:hidden text-gray-500 hover:text-gray-700">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
                 <div className="w-8 h-8 bg-gray-200 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden">
                   {selectedRoom.restaurant.image ? (
-                    <img
-                      src={`/storage/${selectedRoom.restaurant.image}`}
-                      alt=""
-                      className="w-full h-full object-cover"
-                    />
+                    <img src={`/storage/${selectedRoom.restaurant.image}`} alt="" className="w-full h-full object-cover" />
                   ) : (
-                    <span className="text-gray-400 text-xs font-bold">
-                      {selectedRoom.restaurant.name.charAt(0)}
-                    </span>
+                    <span className="text-gray-400 text-xs font-bold">{selectedRoom.restaurant.name.charAt(0)}</span>
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="font-bold text-sm text-gray-800 truncate">
-                    {selectedRoom.user.id === user.id
-                      ? selectedRoom.restaurant.name
-                      : selectedRoom.user.name}
+                    {selectedRoom.user.id === user.id ? selectedRoom.restaurant.name : selectedRoom.user.name}
                   </div>
-                  <div className="text-xs text-gray-500 truncate">
-                    {selectedRoom.restaurant.name}
-                  </div>
+                  <div className="text-xs text-gray-500 truncate">{selectedRoom.restaurant.name}</div>
                 </div>
 
-                {/* ヘッダーアクション: ブロック・通報 */}
                 {otherUserId && (
                   <div className="flex items-center gap-1">
                     <button
@@ -486,7 +312,6 @@ export default function ChatPage() {
                 )}
               </div>
 
-              {/* ブロック通知 */}
               {blockStatus?.blocked_by && (
                 <div className="px-4 py-2 bg-red-50 text-red-600 text-xs text-center">
                   相手にブロックされているため、メッセージを送信できません。
@@ -498,7 +323,6 @@ export default function ChatPage() {
                 </div>
               )}
 
-              {/* メッセージ */}
               <ChatMessages
                 messages={allMessages}
                 currentUserId={user.id}
@@ -510,7 +334,6 @@ export default function ChatPage() {
                 onReportMessage={handleReportMessage}
               />
 
-              {/* 入力 */}
               <ChatInput
                 onSend={handleSend}
                 onSendImages={handleSendImages}
@@ -524,13 +347,8 @@ export default function ChatPage() {
             </>
           ) : newChatRestaurantId ? (
             <>
-              {/* 新規チャット ヘッダー */}
               <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={handleBack}
-                  className="md:hidden text-gray-500 hover:text-gray-700"
-                >
+                <button type="button" onClick={handleBack} className="md:hidden text-gray-500 hover:text-gray-700">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                   </svg>
@@ -538,12 +356,10 @@ export default function ChatPage() {
                 <div className="font-bold text-sm text-gray-800">新しいチャット</div>
               </div>
 
-              {/* 空のメッセージエリア */}
               <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
                 メッセージを送信して会話を始めましょう
               </div>
 
-              {/* 入力 */}
               <ChatInput
                 onSend={handleSend}
                 onSendImages={handleSendImages}
@@ -563,7 +379,6 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* 通報モーダル */}
       {reportTarget && (
         <ReportModal
           targetType={reportTarget.type}

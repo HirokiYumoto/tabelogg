@@ -55,9 +55,7 @@ class ReviewController extends Controller
 
     public function destroy(Review $review)
     {
-        if ($review->user_id !== Auth::id()) {
-            return response()->json(['message' => '権限がありません。'], 403);
-        }
+        $this->authorize('delete', $review);
 
         $restaurant = $review->restaurant;
         $review->delete();

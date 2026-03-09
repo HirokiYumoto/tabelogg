@@ -252,17 +252,8 @@ class ChatController extends Controller
         return response()->json(['message' => 'ok']);
     }
 
-    /**
-     * ルームへのアクセス権を確認
-     */
     private function authorizeRoom(ChatRoom $room): void
     {
-        $userId = Auth::id();
-        $isParticipant = $room->user_id === $userId;
-        $isOwner = $room->restaurant && $room->restaurant->user_id === $userId;
-
-        if (!$isParticipant && !$isOwner) {
-            abort(403, 'このチャットルームへのアクセス権がありません。');
-        }
+        $this->authorize('view', $room);
     }
 }

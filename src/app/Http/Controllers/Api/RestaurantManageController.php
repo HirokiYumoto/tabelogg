@@ -10,16 +10,22 @@ use App\Models\Restaurant;
 use App\Models\RestaurantImage;
 use App\Models\RestaurantSeatType;
 use App\Models\RestaurantTimeSetting;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
+use App\Services\GeocodingService;
 
 class RestaurantManageController extends Controller
 {
+    private GeocodingService $geocoding;
+
+    public function __construct(GeocodingService $geocoding)
+    {
+        parent::__construct();
+        $this->geocoding = $geocoding;
+    }
+
     public function store(StoreRestaurantRequest $request)
     {
-
         $city = City::with('prefecture')->find($request->city_id);
-        [$latitude, $longitude] = $this->geocode($city, $request->address);
+        [$latitude, $longitude] = $this->geocoding->geocode($city, $request->address);
 
         $restaurant = Restaurant::create([
             'name' => $request->name,
@@ -35,71 +41,24 @@ class RestaurantManageController extends Controller
             'longitude' => $longitude,
         ]);
 
-        if ($request->hasFile('images')) {
-            foreach ($request->file('images') as $image) {
-                $path = $image->store('restaurant_images', 'public');
-                RestaurantImage::create([
-                    'restaurant_id' => $restaurant->id,
-                    'image_path' => $path,
-                ]);
-            }
-        }
+        $this->saveImages($restaurant, $request);
+        $this->saveSeatTypes($restaurant, $request);
+        $this->saveTimeSettings($restaurant, $request);
 
-        if ($request->has('seat_types')) {
-            $now = now();
-            $seatRows = collect($request->seat_types)->map(function ($st) use ($restaurant, $now) {
-                $type = $st['type'];
-                $capacity = (int) $st['capacity'];
-                $seatsPerUnit = (int) $st['seats_per_unit'];
-                return [
-                    'restaurant_id' => $restaurant->id,
-                    'name' => RestaurantSeatType::generateName($type, $seatsPerUnit, $capacity),
-                    'type' => $type,
-                    'seats_per_unit' => $seatsPerUnit,
-                    'capacity' => $capacity,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ];
-            })->all();
-            RestaurantSeatType::insert($seatRows);
-        }
-
-        if ($request->has('time_settings')) {
-            $now = now();
-            $timeRows = collect($request->time_settings)->map(function ($ts) use ($restaurant, $now) {
-                return [
-                    'restaurant_id' => $restaurant->id,
-                    'day_of_week' => (int) $ts['day_of_week'],
-                    'start_time' => $ts['start_time'],
-                    'end_time' => $ts['end_time'],
-                    'stay_minutes' => (int) $ts['stay_minutes'],
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ];
-            })->all();
-            RestaurantTimeSetting::insert($timeRows);
-        }
-
-        $restaurant->load(['city.prefecture', 'images', 'seatTypes', 'timeSettings', 'reviews.user', 'reviews.images']);
-        $restaurant->loadCount(['favorites', 'reviews']);
-        $restaurant->loadAvg('reviews', 'rating');
-
-        return new RestaurantDetailResource($restaurant);
+        return new RestaurantDetailResource($this->loadRelations($restaurant));
     }
 
     public function update(StoreRestaurantRequest $request, $id)
     {
         $restaurant = Restaurant::findOrFail($id);
-        if ($restaurant->user_id !== auth()->id()) {
-            return response()->json(['message' => '権限がありません。'], 403);
-        }
+        $this->authorize('update', $restaurant);
 
         $latitude = $restaurant->latitude;
         $longitude = $restaurant->longitude;
 
         if ($request->address !== $restaurant->address || (int) $request->city_id !== $restaurant->city_id) {
             $city = City::with('prefecture')->find($request->city_id);
-            [$latitude, $longitude] = $this->geocode($city, $request->address);
+            [$latitude, $longitude] = $this->geocoding->geocode($city, $request->address);
         }
 
         $restaurant->update([
@@ -115,144 +74,86 @@ class RestaurantManageController extends Controller
             'longitude' => $longitude,
         ]);
 
-        if ($request->hasFile('images')) {
-            foreach ($request->file('images') as $image) {
-                $path = $image->store('restaurant_images', 'public');
-                RestaurantImage::create([
-                    'restaurant_id' => $restaurant->id,
-                    'image_path' => $path,
-                ]);
-            }
-        }
+        $this->saveImages($restaurant, $request);
 
         $restaurant->seatTypes()->delete();
-        if ($request->has('seat_types')) {
-            $now = now();
-            $seatRows = collect($request->seat_types)->map(function ($st) use ($restaurant, $now) {
-                $type = $st['type'];
-                $capacity = (int) $st['capacity'];
-                $seatsPerUnit = (int) $st['seats_per_unit'];
-                return [
-                    'restaurant_id' => $restaurant->id,
-                    'name' => RestaurantSeatType::generateName($type, $seatsPerUnit, $capacity),
-                    'type' => $type,
-                    'seats_per_unit' => $seatsPerUnit,
-                    'capacity' => $capacity,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ];
-            })->all();
-            RestaurantSeatType::insert($seatRows);
-        }
+        $this->saveSeatTypes($restaurant, $request);
 
         $restaurant->timeSettings()->delete();
-        if ($request->has('time_settings')) {
-            $now = now();
-            $timeRows = collect($request->time_settings)->map(function ($ts) use ($restaurant, $now) {
-                return [
-                    'restaurant_id' => $restaurant->id,
-                    'day_of_week' => (int) $ts['day_of_week'],
-                    'start_time' => $ts['start_time'],
-                    'end_time' => $ts['end_time'],
-                    'stay_minutes' => (int) $ts['stay_minutes'],
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ];
-            })->all();
-            RestaurantTimeSetting::insert($timeRows);
-        }
+        $this->saveTimeSettings($restaurant, $request);
 
-        $restaurant->load(['city.prefecture', 'images', 'seatTypes', 'timeSettings', 'reviews.user', 'reviews.images']);
-        $restaurant->loadCount(['favorites', 'reviews']);
-        $restaurant->loadAvg('reviews', 'rating');
-
-        return new RestaurantDetailResource($restaurant);
-    }
-
-    /**
-     * Geocode an address with city-level fallback.
-     * Tries full address first; if Nominatim returns no result, retries with just prefecture + city.
-     */
-    private function geocode(City $city, string $address): array
-    {
-        $prefectureName = $city->prefecture->name;
-        $cityName = $city->name;
-
-        try {
-            // Always get city-level coordinates as baseline
-            $cityAddress = $prefectureName . $cityName;
-            $cityResult = $this->nominatimSearch($cityAddress);
-
-            // Try full address
-            $fullAddress = $prefectureName . $cityName . $address;
-            $fullResult = $this->nominatimSearch($fullAddress);
-
-            if ($fullResult && $cityResult) {
-                // Verify the full-address result is within reasonable distance from city center (50km)
-                $distance = $this->haversineDistance(
-                    (float) $fullResult['lat'], (float) $fullResult['lon'],
-                    (float) $cityResult['lat'], (float) $cityResult['lon']
-                );
-
-                if ($distance <= 50) {
-                    return [$fullResult['lat'], $fullResult['lon']];
-                }
-
-                // Full address result is too far from city → use city-level
-                \Log::info("Geocoding: full address result too far ({$distance}km), using city fallback for: {$fullAddress}");
-                return [$cityResult['lat'], $cityResult['lon']];
-            }
-
-            if ($fullResult) {
-                return [$fullResult['lat'], $fullResult['lon']];
-            }
-
-            if ($cityResult) {
-                \Log::info("Geocoding fallback used for: {$fullAddress} → {$cityAddress}");
-                return [$cityResult['lat'], $cityResult['lon']];
-            }
-        } catch (\Exception $e) {
-            \Log::error('Geocoding Error: ' . $e->getMessage());
-        }
-
-        return [null, null];
-    }
-
-    private function haversineDistance(float $lat1, float $lon1, float $lat2, float $lon2): float
-    {
-        $earthRadius = 6371;
-        $dLat = deg2rad($lat2 - $lat1);
-        $dLon = deg2rad($lon2 - $lon1);
-        $a = sin($dLat / 2) ** 2 + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLon / 2) ** 2;
-        return $earthRadius * 2 * atan2(sqrt($a), sqrt(1 - $a));
-    }
-
-    private function nominatimSearch(string $query): ?array
-    {
-        $response = Http::withHeaders([
-            'User-Agent' => 'LaravelApp/1.0 (test-user)',
-        ])->get('https://nominatim.openstreetmap.org/search', [
-            'q' => $query,
-            'format' => 'json',
-            'limit' => 1,
-        ]);
-
-        if ($response->successful() && !empty($response->json())) {
-            return $response->json()[0];
-        }
-
-        return null;
+        return new RestaurantDetailResource($this->loadRelations($restaurant));
     }
 
     public function destroy($id)
     {
         $restaurant = Restaurant::findOrFail($id);
-        if ($restaurant->user_id !== auth()->id()) {
-            return response()->json(['message' => '権限がありません。'], 403);
-        }
+        $this->authorize('delete', $restaurant);
 
         $restaurant->delete();
 
         return response()->json(['message' => '店舗を削除しました。']);
+    }
+
+    private function saveImages(Restaurant $restaurant, StoreRestaurantRequest $request): void
+    {
+        if (!$request->hasFile('images')) return;
+
+        foreach ($request->file('images') as $image) {
+            $path = $image->store('restaurant_images', 'public');
+            RestaurantImage::create([
+                'restaurant_id' => $restaurant->id,
+                'image_path' => $path,
+            ]);
+        }
+    }
+
+    private function saveSeatTypes(Restaurant $restaurant, StoreRestaurantRequest $request): void
+    {
+        if (!$request->has('seat_types')) return;
+
+        $now = now();
+        $seatRows = collect($request->seat_types)->map(function ($st) use ($restaurant, $now) {
+            $type = $st['type'];
+            $capacity = (int) $st['capacity'];
+            $seatsPerUnit = (int) $st['seats_per_unit'];
+            return [
+                'restaurant_id' => $restaurant->id,
+                'name' => RestaurantSeatType::generateName($type, $seatsPerUnit, $capacity),
+                'type' => $type,
+                'seats_per_unit' => $seatsPerUnit,
+                'capacity' => $capacity,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        })->all();
+        RestaurantSeatType::insert($seatRows);
+    }
+
+    private function saveTimeSettings(Restaurant $restaurant, StoreRestaurantRequest $request): void
+    {
+        if (!$request->has('time_settings')) return;
+
+        $now = now();
+        $timeRows = collect($request->time_settings)->map(function ($ts) use ($restaurant, $now) {
+            return [
+                'restaurant_id' => $restaurant->id,
+                'day_of_week' => (int) $ts['day_of_week'],
+                'start_time' => $ts['start_time'],
+                'end_time' => $ts['end_time'],
+                'stay_minutes' => (int) $ts['stay_minutes'],
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        })->all();
+        RestaurantTimeSetting::insert($timeRows);
+    }
+
+    private function loadRelations(Restaurant $restaurant): Restaurant
+    {
+        $restaurant->load(['city.prefecture', 'images', 'seatTypes', 'timeSettings', 'reviews.user', 'reviews.images']);
+        $restaurant->loadCount(['favorites', 'reviews']);
+        $restaurant->loadAvg('reviews', 'rating');
+        return $restaurant;
     }
 }

@@ -170,9 +170,7 @@ class ReservationController extends Controller
 
     public function destroy(Reservation $reservation)
     {
-        if ($reservation->user_id !== Auth::id()) {
-            return response()->json(['message' => '権限がありません。'], 403);
-        }
+        $this->authorize('delete', $reservation);
 
         $reservation->delete();
 
