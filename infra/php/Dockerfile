@@ -14,8 +14,15 @@ RUN apt-get update && \
     DICDIR=$(/opt/unidic-env/bin/python3 -c "import unidic_lite; print(unidic_lite.DICDIR)") && \
     echo "dicdir = $DICDIR" > /usr/local/etc/mecabrc
 
-# php.iniをコピー
-COPY ./php.ini /usr/local/etc/php/php.ini
+# php.iniをコピー（APP_ENV=production なら本番用を使用）
+ARG APP_ENV=local
+COPY ./php.ini /usr/local/etc/php/php.ini.dev
+COPY ./php.ini.prod /usr/local/etc/php/php.ini.prod
+RUN if [ "$APP_ENV" = "production" ]; then \
+      cp /usr/local/etc/php/php.ini.prod /usr/local/etc/php/php.ini; \
+    else \
+      cp /usr/local/etc/php/php.ini.dev /usr/local/etc/php/php.ini; \
+    fi
 
 # Composerのインストール
 COPY --from=composer:2.2 /usr/bin/composer /usr/bin/composer

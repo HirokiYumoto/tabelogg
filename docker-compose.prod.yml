@@ -1,0 +1,29 @@
+# 本番用 Docker Compose オーバーライド
+# 使い方: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# 開発用 docker-compose.yml との差分:
+# - DB/Redis/Meilisearch のポートをローカルホストに制限
+# - php.ini を本番用に切り替え
+# - Vite dev server ポートを公開しない
+
+services:
+  app:
+    build:
+      context: ./infra/php
+      args:
+        APP_ENV: production
+    ports: []  # Vite dev server は本番では不要
+
+  db:
+    ports:
+      - "127.0.0.1:3306:3306"
+
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  meilisearch:
+    ports:
+      - "127.0.0.1:7700:7700"
+    environment:
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}

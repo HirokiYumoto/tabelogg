@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreRestaurantRequest;
 use App\Http\Resources\RestaurantDetailResource;
 use App\Models\City;
 use App\Models\Restaurant;
@@ -14,28 +15,8 @@ use Illuminate\Support\Facades\Http;
 
 class RestaurantManageController extends Controller
 {
-    public function store(Request $request)
+    public function store(StoreRestaurantRequest $request)
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'description' => 'required|string',
-            'city_id' => 'required|exists:cities,id',
-            'postal_code' => ['required', 'string', 'regex:/^\d{7}$/'],
-            'address' => 'required|string|max:255',
-            'nearest_station' => 'nullable|string|max:255',
-            'menu_info' => 'nullable|string',
-            'max_party_size' => 'nullable|integer|min:1',
-            'images.*' => 'nullable|image|max:2048',
-            'seat_types' => 'nullable|array',
-            'seat_types.*.type' => 'required_with:seat_types|in:counter,table',
-            'seat_types.*.capacity' => 'required_with:seat_types|integer|min:1',
-            'seat_types.*.seats_per_unit' => 'required_with:seat_types|integer|min:1',
-            'time_settings' => 'nullable|array',
-            'time_settings.*.day_of_week' => 'required|integer|between:0,7',
-            'time_settings.*.start_time' => 'required|date_format:H:i',
-            'time_settings.*.end_time' => ['required', 'regex:/^([01]\d|2[0-4]):[0-5]\d$/'],
-            'time_settings.*.stay_minutes' => 'required|integer|in:30,60,90,120',
-        ]);
 
         $city = City::with('prefecture')->find($request->city_id);
         [$latitude, $longitude] = $this->geocode($city, $request->address);
@@ -106,33 +87,12 @@ class RestaurantManageController extends Controller
         return new RestaurantDetailResource($restaurant);
     }
 
-    public function update(Request $request, $id)
+    public function update(StoreRestaurantRequest $request, $id)
     {
         $restaurant = Restaurant::findOrFail($id);
         if ($restaurant->user_id !== auth()->id()) {
             return response()->json(['message' => '権限がありません。'], 403);
         }
-
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'description' => 'required|string',
-            'city_id' => 'required|exists:cities,id',
-            'postal_code' => ['required', 'string', 'regex:/^\d{7}$/'],
-            'address' => 'required|string|max:255',
-            'nearest_station' => 'nullable|string|max:255',
-            'menu_info' => 'nullable|string',
-            'max_party_size' => 'nullable|integer|min:1',
-            'images.*' => 'nullable|image|max:2048',
-            'seat_types' => 'nullable|array',
-            'seat_types.*.type' => 'required_with:seat_types|in:counter,table',
-            'seat_types.*.capacity' => 'required_with:seat_types|integer|min:1',
-            'seat_types.*.seats_per_unit' => 'required_with:seat_types|integer|min:1',
-            'time_settings' => 'nullable|array',
-            'time_settings.*.day_of_week' => 'required|integer|between:0,7',
-            'time_settings.*.start_time' => 'required|date_format:H:i',
-            'time_settings.*.end_time' => ['required', 'regex:/^([01]\d|2[0-4]):[0-5]\d$/'],
-            'time_settings.*.stay_minutes' => 'required|integer|in:30,60,90,120',
-        ]);
 
         $latitude = $restaurant->latitude;
         $longitude = $restaurant->longitude;

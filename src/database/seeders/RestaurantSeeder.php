@@ -18,6 +18,12 @@ class RestaurantSeeder extends Seeder
      */
     public function run(): void
     {
+        // 本番環境では脆弱なテストデータの作成を禁止
+        if (\Illuminate\Support\Facades\App::isProduction()) {
+            $this->command?->warn('RestaurantSeeder: 本番環境ではスキップされました');
+            return;
+        }
+
         Schema::disableForeignKeyConstraints();
         // 親テーブルを消す前に子テーブルもクリーンにする（外部キー制約回避のため）
         RestaurantTimeSetting::truncate();

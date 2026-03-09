@@ -9,7 +9,9 @@ export default defineConfig({
             input: ['resources/js/App.tsx'],
             refresh: true,
         }),
-        react(),
+        react({
+            include: '**/*.{jsx,tsx,js,ts}',
+        }),
     ],
     resolve: {
         alias: {

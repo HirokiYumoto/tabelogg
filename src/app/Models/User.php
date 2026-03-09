@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\RoleEnum;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -25,6 +26,7 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
+        'role_id' => RoleEnum::class,
     ];
 
     // ユーザーがお気に入り登録したデータ
@@ -70,8 +72,14 @@ class User extends Authenticatable
     }
 
     // 店舗オーナーかどうか判定
-    public function isStoreOwner()
+    public function isStoreOwner(): bool
     {
-        return $this->role_id === 2;
+        return $this->role_id === RoleEnum::Owner;
+    }
+
+    // 管理者かどうか判定
+    public function isAdmin(): bool
+    {
+        return $this->role_id === RoleEnum::Admin;
     }
 }

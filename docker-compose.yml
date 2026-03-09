@@ -58,7 +58,7 @@ services:
     ports:
       - "7700:7700"
     environment:
-      - MEILI_MASTER_KEY=meilisearch
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:-meilisearch}
     volumes:
       - meili_data:/meili_data
 

@@ -17,10 +17,17 @@ class MeCabService
      * MeCab で形態素解析し、読みを取得してひらがなに変換する
      * mecabrc に辞書パスが設定済みなので -d オプションは不要
      */
+    private const MAX_INPUT_LENGTH = 10000;
+
     public function toReading(string $text): string
     {
         if (trim($text) === '') {
             return '';
+        }
+
+        // DoS対策: 長大入力で proc_open がハングするのを防止
+        if (mb_strlen($text) > self::MAX_INPUT_LENGTH) {
+            $text = mb_substr($text, 0, self::MAX_INPUT_LENGTH);
         }
 
         $descriptors = [

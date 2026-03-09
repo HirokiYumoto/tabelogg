@@ -22,7 +22,7 @@ const registerSchema = z
     password_confirmation: z
       .string()
       .min(1, 'パスワード（確認）を入力してください'),
-    role_id: z.number({ error: '会員種別を選択してください' }),
+    register_as_owner: z.boolean(),
   })
   .refine((data) => data.password === data.password_confirmation, {
     message: 'パスワードが一致しません',
@@ -48,7 +48,7 @@ export default function RegisterPage() {
       email: '',
       password: '',
       password_confirmation: '',
-      role_id: 1,
+      register_as_owner: false,
     },
   });
 
@@ -170,8 +170,11 @@ export default function RegisterPage() {
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="radio"
-                value={1}
-                {...register('role_id', { valueAsNumber: true })}
+                value="false"
+                {...register('register_as_owner', {
+                  setValueAs: (v: string) => v === 'true',
+                })}
+                defaultChecked
                 className="h-4 w-4 text-orange-500 border-gray-300 focus:ring-orange-400"
               />
               <span className="text-sm text-gray-700">一般ユーザー</span>
@@ -179,17 +182,19 @@ export default function RegisterPage() {
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="radio"
-                value={2}
-                {...register('role_id', { valueAsNumber: true })}
+                value="true"
+                {...register('register_as_owner', {
+                  setValueAs: (v: string) => v === 'true',
+                })}
                 className="h-4 w-4 text-orange-500 border-gray-300 focus:ring-orange-400"
               />
               <span className="text-sm text-gray-700">店舗代表者</span>
             </label>
           </div>
-          {errors.role_id && (
-            <p className="mt-1 text-sm text-red-600">{errors.role_id.message}</p>
+          {errors.register_as_owner && (
+            <p className="mt-1 text-sm text-red-600">{errors.register_as_owner.message}</p>
           )}
-          {serverErrors.role_id?.map((msg, i) => (
+          {serverErrors.register_as_owner?.map((msg, i) => (
             <p key={i} className="mt-1 text-sm text-red-600">{msg}</p>
           ))}
         </div>

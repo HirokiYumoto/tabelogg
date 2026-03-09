@@ -26,7 +26,8 @@ class Restaurant extends Model
         'longitude',
         'max_party_size',
         'postal_code',
-        'review_summary',
+        // review_summary はシステムが生成する値のため $fillable から除外
+        // 更新はサービスクラス経由で $restaurant->update(['review_summary' => ...]) を使用
     ];
 
     protected $casts = [
@@ -42,6 +43,11 @@ class Restaurant extends Model
     public function city()
     {
         return $this->belongsTo(City::class);
+    }
+
+    public function genres()
+    {
+        return $this->belongsToMany(Genre::class, 'restaurant_genre');
     }
 
     public function images()

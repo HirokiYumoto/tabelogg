@@ -37,7 +37,7 @@ class RegenerateReviewSummaries extends Command
 
         foreach ($restaurants as $restaurant) {
             $summary = $summaryService->generate($restaurant);
-            $restaurant->update(['review_summary' => $summary]);
+            $restaurant->forceFill(['review_summary' => $summary])->save();
 
             if ($summary !== null) {
                 $success++;

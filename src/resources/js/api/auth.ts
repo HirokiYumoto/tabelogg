@@ -12,7 +12,7 @@ export async function register(params: {
   email: string;
   password: string;
   password_confirmation: string;
-  role_id: number;
+  register_as_owner: boolean;
 }): Promise<User> {
   await getCsrfCookie();
   const { data } = await apiClient.post('/register', params);

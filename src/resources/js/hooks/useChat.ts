@@ -1,8 +1,11 @@
 import { useEffect, useRef } from 'react';
-import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery, InfiniteData } from '@tanstack/react-query';
 import * as chatApi from '@/api/chat';
 import { getEcho, onReconnect } from '@/lib/echo';
-import type { ChatMessage, ChatRoom } from '@/types/chat';
+import type { ChatMessage, ChatMessagesResponse, ChatRoom } from '@/types/chat';
+
+// --- 型エイリアス ---
+type ChatMessagesCache = InfiniteData<ChatMessagesResponse> | undefined;
 
 // --- Subscription coordination (P4) ---
 // Tracks the currently open room so useGlobalChatSubscription can skip
@@ -39,10 +42,10 @@ function updateRoomsWithMessage(
   return [updated, ...rest];
 }
 
-function addMessageToCache(old: any, msg: ChatMessage) {
+function addMessageToCache(old: ChatMessagesCache, msg: ChatMessage): ChatMessagesCache {
   if (!old) return old;
   const msgId = Number(msg.id);
-  const exists = old.pages.some((page: any) =>
+  const exists = old.pages.some((page: ChatMessagesResponse) =>
     page.data.some((m: ChatMessage) => Number(m.id) === msgId)
   );
   if (exists) return old;
@@ -94,9 +97,9 @@ export function useSendMessage() {
     }) => chatApi.sendMessage(restaurantId, body, roomId),
     onSuccess: (newMessage) => {
       // Add to message cache
-      queryClient.setQueryData(
+      queryClient.setQueryData<ChatMessagesCache>(
         ['chatMessages', newMessage.chat_room_id],
-        (old: any) => addMessageToCache(old, newMessage)
+        (old) => addMessageToCache(old, newMessage)
       );
 
       // Optimistic chatRooms update (own message doesn't increment unread)
@@ -130,9 +133,9 @@ export function useSendImageMessage() {
     }) => chatApi.sendImageMessage(restaurantId, images, body, roomId),
     onSuccess: (newMessage) => {
       // Add to message cache
-      queryClient.setQueryData(
+      queryClient.setQueryData<ChatMessagesCache>(
         ['chatMessages', newMessage.chat_room_id],
-        (old: any) => addMessageToCache(old, newMessage)
+        (old) => addMessageToCache(old, newMessage)
       );
 
       // Optimistic chatRooms update
@@ -152,13 +155,13 @@ export function useHideMessage() {
   return useMutation({
     mutationFn: (messageId: number) => chatApi.hideMessage(messageId),
     onSuccess: (_data, messageId) => {
-      queryClient.setQueriesData(
+      queryClient.setQueriesData<ChatMessagesCache>(
         { queryKey: ['chatMessages'] },
-        (old: any) => {
+        (old) => {
           if (!old) return old;
           return {
             ...old,
-            pages: old.pages.map((page: any) => ({
+            pages: old.pages.map((page: ChatMessagesResponse) => ({
               ...page,
               data: page.data.filter((m: ChatMessage) => m.id !== messageId),
             })),
@@ -288,9 +291,9 @@ export function useGlobalChatSubscription(userId: number | null) {
       }
 
       // Add message to cache if that room's messages are loaded
-      queryClient.setQueryData(
+      queryClient.setQueryData<ChatMessagesCache>(
         ['chatMessages', msg.chat_room_id],
-        (old: any) => addMessageToCache(old, msg)
+        (old) => addMessageToCache(old, msg)
       );
     });
 
@@ -344,9 +347,9 @@ export function useChatSubscription(roomId: number | null, currentUserId?: numbe
       }
 
       // Add message to cache
-      queryClient.setQueryData(
+      queryClient.setQueryData<ChatMessagesCache>(
         ['chatMessages', rid],
-        (old: any) => addMessageToCache(old, newMessage)
+        (old) => addMessageToCache(old, newMessage)
       );
 
       // P3: Optimistic chatRooms update
@@ -376,18 +379,18 @@ export function useChatSubscription(roomId: number | null, currentUserId?: numbe
     });
 
     // P2: Listen for message.read events (other user read our messages)
-    channel.listen('.message.read', (e: { room_id: number; read_by: number }) => {
+    channel.listen('.message.read', (_e: { room_id: number; read_by: number }) => {
       const rid = roomIdRef.current;
       if (!rid) return;
 
       // Update is_read on all messages in cache sent by current user
-      queryClient.setQueryData(
+      queryClient.setQueryData<ChatMessagesCache>(
         ['chatMessages', rid],
-        (old: any) => {
+        (old) => {
           if (!old) return old;
           return {
             ...old,
-            pages: old.pages.map((page: any) => ({
+            pages: old.pages.map((page: ChatMessagesResponse) => ({
               ...page,
               data: page.data.map((m: ChatMessage) =>
                 m.sender_id === currentUserIdRef.current && !m.is_read

@@ -25,7 +25,7 @@ class GenerateReviewSummaryJob implements ShouldQueue
     public function handle(ReviewSummaryService $summaryService): void
     {
         $summary = $summaryService->generate($this->restaurant);
-        $this->restaurant->update(['review_summary' => $summary]);
+        $this->restaurant->forceFill(['review_summary' => $summary])->save();
 
         Log::info('Review summary generated', [
             'restaurant_id' => $this->restaurant->id,

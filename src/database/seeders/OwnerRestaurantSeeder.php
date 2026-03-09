@@ -16,6 +16,12 @@ class OwnerRestaurantSeeder extends Seeder
 {
     public function run(): void
     {
+        // 本番環境では脆弱なテストデータの作成を禁止
+        if (\Illuminate\Support\Facades\App::isProduction()) {
+            $this->command?->warn('OwnerRestaurantSeeder: 本番環境ではスキップされました');
+            return;
+        }
+
         // CitySeeder が未実行なら先に実行
         if (City::count() === 0) {
             $this->call(CitySeeder::class);
@@ -23,7 +29,7 @@ class OwnerRestaurantSeeder extends Seeder
 
         // オーナーユーザー作成
         $user = User::firstOrCreate(
-            ['email' => 'test10@aidma-hd.jp'],
+            ['email' => 'test-owner@example.com'],
             [
                 'name' => 'テストオーナー10',
                 'password' => Hash::make('11111111'),

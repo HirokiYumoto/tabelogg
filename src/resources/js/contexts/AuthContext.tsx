@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
-import type { User } from '@/types/user';
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { User } from '@/types/user';
 import * as authApi from '@/api/auth';
 
 interface AuthContextType {
@@ -13,7 +13,7 @@ interface AuthContextType {
     email: string;
     password: string;
     password_confirmation: string;
-    role_id: number;
+    register_as_owner: boolean;
   }) => Promise<User>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: string;
       password: string;
       password_confirmation: string;
-      role_id: number;
+      register_as_owner: boolean;
     }) => {
       const u = await authApi.register(params);
       setUser(u);

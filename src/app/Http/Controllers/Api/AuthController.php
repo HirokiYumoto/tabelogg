@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\RoleEnum;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Models\User;
@@ -38,14 +39,19 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
-            'role_id' => 'required|integer|in:1,2',
+            'register_as_owner' => 'sometimes|boolean',
         ]);
+
+        // role_id はサーバーサイドで決定（ユーザーからの直接指定を禁止）
+        $roleId = $request->boolean('register_as_owner')
+            ? RoleEnum::Owner
+            : RoleEnum::User;
 
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
-            'role_id' => $request->role_id,
+            'role_id' => $roleId,
         ]);
 
         Auth::login($user);
