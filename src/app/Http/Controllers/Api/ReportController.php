@@ -4,10 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Report;
-use App\Models\ReportImage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
 
 class ReportController extends Controller
 {
@@ -17,31 +15,36 @@ class ReportController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'target_type' => 'required|string|in:user,chat_message',
-            'target_id' => 'required|integer',
+            'target_user_id' => 'required|integer|exists:users,id',
             'reason' => 'required|string|max:2000',
-            'images' => 'nullable|array|max:5',
-            'images.*' => 'image|max:5120', // 5MB per image
         ]);
 
-        $report = Report::create([
+        $exists = Report::where('reporter_id', Auth::id())
+            ->where('target_user_id', $request->input('target_user_id'))
+            ->exists();
+
+        if ($exists) {
+            abort(409, 'すでに通報済みです。');
+        }
+
+        Report::create([
             'reporter_id' => Auth::id(),
-            'target_type' => $request->input('target_type'),
-            'target_id' => $request->input('target_id'),
+            'target_user_id' => $request->input('target_user_id'),
             'reason' => $request->input('reason'),
         ]);
 
-        if ($request->hasFile('images')) {
-            foreach ($request->file('images') as $file) {
-                $path = $file->store('report_images', 'public');
-
-                ReportImage::create([
-                    'report_id' => $report->id,
-                    'image_path' => $path,
-                ]);
-            }
-        }
-
         return response()->json(['message' => '通報を受け付けました。'], 201);
+    }
+
+    /**
+     * 通報ステータス取得
+     */
+    public function status(int $userId)
+    {
+        $reported = Report::where('reporter_id', Auth::id())
+            ->where('target_user_id', $userId)
+            ->exists();
+
+        return response()->json(['reported' => $reported]);
     }
 }

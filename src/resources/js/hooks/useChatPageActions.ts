@@ -8,9 +8,10 @@ import {
   useBlockUser,
   useUnblockUser,
   useBlockStatus,
+  useReportStatus,
   useReport,
 } from '@/hooks/useChat';
-import type { ChatRoom, BlockStatus } from '@/types/chat';
+import type { ChatRoom, BlockStatus, ReportStatus } from '@/types/chat';
 
 interface UseChatPageActionsParams {
   selectedRoom: ChatRoom | null;
@@ -50,6 +51,7 @@ export function useChatPageActions({
   const unblockMutation = useUnblockUser();
   const reportMutation = useReport();
   const { data: blockStatus } = useBlockStatus(otherUserId);
+  const { data: reportStatus } = useReportStatus(otherUserId);
 
   const handleSend = useCallback(
     (body: string) => {
@@ -157,8 +159,9 @@ export function useChatPageActions({
 
   const handleReportUser = useCallback(() => {
     if (!otherUserId) return;
+    if (reportStatus?.reported) return;
     setReportTarget({ type: 'user', id: otherUserId });
-  }, [otherUserId]);
+  }, [otherUserId, reportStatus]);
 
   const handleReportMessage = useCallback((messageId: number) => {
     setReportTarget({ type: 'chat_message', id: messageId });
@@ -168,7 +171,7 @@ export function useChatPageActions({
     (reason: string) => {
       if (!reportTarget) return;
       reportMutation.mutate(
-        { targetType: reportTarget.type, targetId: reportTarget.id, reason },
+        { targetUserId: reportTarget.id, reason },
         {
           onSuccess: () => {
             setReportTarget(null);
@@ -199,6 +202,7 @@ export function useChatPageActions({
     sendMutation,
     sendImageMutation,
     blockStatus: blockStatus as BlockStatus | undefined,
+    reportStatus: reportStatus as ReportStatus | undefined,
     reportTarget,
     reportMutation,
     setReportTarget,

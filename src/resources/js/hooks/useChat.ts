@@ -157,19 +157,27 @@ export function useBlockStatus(userId: number | null) {
   });
 }
 
+export function useReportStatus(userId: number | null) {
+  return useQuery({
+    queryKey: ['reportStatus', userId],
+    queryFn: () => chatApi.getReportStatus(userId!),
+    enabled: !!userId,
+  });
+}
+
 export function useReport() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
-      targetType,
-      targetId,
+      targetUserId,
       reason,
-      images,
     }: {
-      targetType: string;
-      targetId: number;
+      targetUserId: number;
       reason: string;
-      images?: File[];
-    }) => chatApi.sendReport(targetType, targetId, reason, images),
+    }) => chatApi.sendReport(targetUserId, reason),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['reportStatus', variables.targetUserId] });
+    },
   });
 }
 

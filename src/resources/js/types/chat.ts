@@ -4,6 +4,7 @@ export interface ChatRoom {
     id: number;
     name: string;
     image: string | null;
+    user_id: number;
   };
   user: {
     id: number;
@@ -45,4 +46,8 @@ export interface ChatMessagesResponse {
 export interface BlockStatus {
   blocking: boolean;
   blocked_by: boolean;
+}
+
+export interface ReportStatus {
+  reported: boolean;
 }

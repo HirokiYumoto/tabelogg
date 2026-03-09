@@ -35,7 +35,8 @@ export default function ChatPage() {
 
   const otherUserId = useMemo(() => {
     if (!selectedRoom || !user) return null;
-    return selectedRoom.user.id === user.id ? null : selectedRoom.user.id;
+    if (selectedRoom.user.id !== user.id) return selectedRoom.user.id;
+    return selectedRoom.restaurant.user_id;
   }, [selectedRoom, user]);
 
   const restaurantGroups = useMemo<RestaurantGroup[]>(() => {
@@ -84,6 +85,7 @@ export default function ChatPage() {
     sendMutation,
     sendImageMutation,
     blockStatus,
+    reportStatus,
     reportTarget,
     reportMutation,
     setReportTarget,
@@ -304,9 +306,14 @@ export default function ChatPage() {
                     <button
                       type="button"
                       onClick={handleReportUser}
-                      className="text-xs text-gray-500 hover:bg-gray-100 px-2 py-1 rounded-lg transition"
+                      disabled={!!reportStatus?.reported}
+                      className={`text-xs px-2 py-1 rounded-lg transition ${
+                        reportStatus?.reported
+                          ? 'text-gray-400 cursor-not-allowed'
+                          : 'text-gray-500 hover:bg-gray-100'
+                      }`}
                     >
-                      通報
+                      {reportStatus?.reported ? '通報済み' : '通報'}
                     </button>
                   </div>
                 )}
@@ -320,6 +327,11 @@ export default function ChatPage() {
               {blockStatus?.blocking && !blockStatus?.blocked_by && (
                 <div className="px-4 py-2 bg-gray-50 text-gray-500 text-xs text-center">
                   ブロック中のため、メッセージを送信できません。
+                </div>
+              )}
+              {reportStatus?.reported && (
+                <div className="px-4 py-2 bg-yellow-50 text-yellow-700 text-xs text-center">
+                  すでに通報済みです
                 </div>
               )}
 

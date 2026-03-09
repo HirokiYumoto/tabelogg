@@ -48,14 +48,9 @@ class ChatController extends Controller
     {
         $userId = Auth::id();
 
-        // ブロックしている/されているユーザーID
-        $blockedUserIds = UserBlock::where('blocker_id', $userId)
-            ->orWhere('blocked_id', $userId)
-            ->get()
-            ->flatMap(fn ($b) => [$b->blocker_id, $b->blocked_id])
-            ->reject(fn ($id) => $id === $userId)
-            ->unique()
-            ->values();
+        // 自分がブロックした相手のユーザーID（ブロックされた側のルームは表示する）
+        $blockedByMeUserIds = UserBlock::where('blocker_id', $userId)
+            ->pluck('blocked_id');
 
         $rooms = ChatRoom::with(['restaurant.images', 'user', 'latestMessage'])
             ->withCount(['messages as unread_count' => function ($query) use ($userId) {
@@ -65,10 +60,10 @@ class ChatController extends Controller
                 $query->where('user_id', $userId)
                     ->orWhereHas('restaurant', fn ($q) => $q->where('user_id', $userId));
             })
-            // ブロック関係のユーザーとのルームを除外
-            ->when($blockedUserIds->isNotEmpty(), function ($query) use ($blockedUserIds) {
-                $query->whereNotIn('user_id', $blockedUserIds)
-                    ->whereDoesntHave('restaurant', fn ($q) => $q->whereIn('user_id', $blockedUserIds));
+            // 自分がブロックした相手とのルームのみ除外
+            ->when($blockedByMeUserIds->isNotEmpty(), function ($query) use ($blockedByMeUserIds) {
+                $query->whereNotIn('user_id', $blockedByMeUserIds)
+                    ->whereDoesntHave('restaurant', fn ($q) => $q->whereIn('user_id', $blockedByMeUserIds));
             })
             ->orderByDesc(
                 ChatMessage::select('created_at')

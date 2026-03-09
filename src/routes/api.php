@@ -94,6 +94,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/users/{userId}/block', [BlockController::class, 'destroy']);
 
     // Report
+    Route::get('/users/{userId}/report-status', [ReportController::class, 'status']);
     Route::post('/reports', [ReportController::class, 'store']);
 
     // Owner routes

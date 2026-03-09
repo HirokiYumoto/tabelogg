@@ -15,6 +15,7 @@ class ChatRoomResource extends JsonResource
                 'id' => $this->restaurant->id,
                 'name' => $this->restaurant->name,
                 'image' => $this->restaurant->images->first()?->image_path,
+                'user_id' => $this->restaurant->user_id,
             ],
             'user' => [
                 'id' => $this->user->id,

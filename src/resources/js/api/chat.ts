@@ -1,5 +1,5 @@
 import apiClient from './client';
-import type { ChatRoom, ChatMessage, ChatMessagesResponse, BlockStatus } from '@/types/chat';
+import type { ChatRoom, ChatMessage, ChatMessagesResponse, BlockStatus, ReportStatus } from '@/types/chat';
 
 export async function getChatRooms(): Promise<ChatRoom[]> {
   const { data } = await apiClient.get('/chat/rooms');
@@ -74,20 +74,11 @@ export async function unblockUser(userId: number): Promise<void> {
   await apiClient.delete(`/users/${userId}/block`);
 }
 
-export async function sendReport(
-  targetType: string,
-  targetId: number,
-  reason: string,
-  images?: File[]
-): Promise<void> {
-  const formData = new FormData();
-  formData.append('target_type', targetType);
-  formData.append('target_id', String(targetId));
-  formData.append('reason', reason);
-  if (images) {
-    images.forEach((file) => formData.append('images[]', file));
-  }
-  await apiClient.post('/reports', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+export async function sendReport(targetUserId: number, reason: string): Promise<void> {
+  await apiClient.post('/reports', { target_user_id: targetUserId, reason });
+}
+
+export async function getReportStatus(userId: number): Promise<ReportStatus> {
+  const { data } = await apiClient.get(`/users/${userId}/report-status`);
+  return data;
 }
