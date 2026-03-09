@@ -176,8 +176,8 @@ export function useReport() {
 export function useMarkRead(roomId: number | null) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => chatApi.markRead(roomId!),
-    onSuccess: () => {
+    mutationFn: (roomUnread: number) => chatApi.markRead(roomId!),
+    onSuccess: (_data, roomUnread) => {
       queryClient.setQueryData(['chatRooms'], (old: ChatRoom[] | undefined) => {
         if (!old || !roomId) return old;
         return old.map((r) =>
@@ -187,7 +187,7 @@ export function useMarkRead(roomId: number | null) {
 
       queryClient.setQueryData(['chatUnreadCount'], (old: number | undefined) => {
         if (old === undefined || old <= 0) return 0;
-        return Math.max(0, old);
+        return Math.max(0, old - roomUnread);
       });
       queryClient.invalidateQueries({ queryKey: ['chatUnreadCount'] });
     },

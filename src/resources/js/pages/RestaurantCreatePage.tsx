@@ -263,7 +263,14 @@ export default function RestaurantCreatePage() {
       if (err instanceof AxiosError && err.response?.data?.errors) {
         setServerErrors(err.response.data.errors);
       } else {
-        setServerErrors({ name: ['店舗の登録に失敗しました。もう一度お試しください。'] });
+        const status = err instanceof AxiosError ? err.response?.status : undefined;
+        const errorCode = status === 401 ? 'E401: 未認証'
+          : status === 403 ? 'E403: 権限不足'
+          : status === 419 ? 'E419: セッション期限切れ'
+          : status === 500 ? 'E500: サーバーエラー'
+          : status ? `E${status}`
+          : 'E000: ネットワークエラー';
+        setServerErrors({ name: [`店舗の登録に失敗しました。もう一度お試しください。（${errorCode}）`] });
       }
     } finally {
       setIsSubmittingForm(false);

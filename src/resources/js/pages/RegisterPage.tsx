@@ -22,7 +22,10 @@ const registerSchema = z
     password_confirmation: z
       .string()
       .min(1, 'パスワード（確認）を入力してください'),
-    register_as_owner: z.boolean(),
+    register_as_owner: z.preprocess(
+      (v) => v === true || v === 'true',
+      z.boolean()
+    ),
   })
   .refine((data) => data.password === data.password_confirmation, {
     message: 'パスワードが一致しません',
@@ -171,9 +174,7 @@ export default function RegisterPage() {
               <input
                 type="radio"
                 value="false"
-                {...register('register_as_owner', {
-                  setValueAs: (v: string) => v === 'true',
-                })}
+                {...register('register_as_owner')}
                 defaultChecked
                 className="h-4 w-4 text-orange-500 border-gray-300 focus:ring-orange-400"
               />
@@ -183,9 +184,7 @@ export default function RegisterPage() {
               <input
                 type="radio"
                 value="true"
-                {...register('register_as_owner', {
-                  setValueAs: (v: string) => v === 'true',
-                })}
+                {...register('register_as_owner')}
                 className="h-4 w-4 text-orange-500 border-gray-300 focus:ring-orange-400"
               />
               <span className="text-sm text-gray-700">店舗代表者</span>

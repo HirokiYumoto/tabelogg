@@ -28,6 +28,7 @@ export function useRestaurant(id: number) {
       const data = query.state.data;
       if (!data || data.reviews_count === 0) return false;
       if (!data.review_summary || data.review_summary.review_count !== data.reviews_count) {
+        if (query.state.dataUpdateCount > 12) return false; // 上限12回（約1分）で停止
         return 5_000;
       }
       return false;

@@ -30,9 +30,9 @@ export function useStoreReservation() {
         number_of_people: number;
       };
     }) => storeReservation(restaurantId, params),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['reservations'] });
-      queryClient.invalidateQueries({ queryKey: ['restaurant'] });
+      queryClient.invalidateQueries({ queryKey: ['restaurant', variables.restaurantId] });
     },
   });
 }

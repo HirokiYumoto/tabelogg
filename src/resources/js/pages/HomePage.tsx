@@ -192,8 +192,8 @@ export default function HomePage() {
   };
 
   if (sort === 'distance' && lat != null && lng != null) {
-    queryParams.lat = String(Math.round(lat * 10000) / 10000);
-    queryParams.lng = String(Math.round(lng * 10000) / 10000);
+    queryParams.lat = String(Math.round(lat * 1000) / 1000);
+    queryParams.lng = String(Math.round(lng * 1000) / 1000);
   }
 
   const {

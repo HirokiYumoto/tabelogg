@@ -143,7 +143,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (selectedRoom && selectedRoom.unread_count > 0) {
-      markReadMutation.mutate();
+      markReadMutation.mutate(selectedRoom.unread_count);
     }
   }, [selectedRoom?.id]);
 
