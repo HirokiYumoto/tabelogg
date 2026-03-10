@@ -6,9 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Http\Resources\RestaurantResource;
 use App\Http\Resources\ReviewResource;
+use App\Http\Resources\ReportResource;
+use App\Models\Report;
 use App\Models\Restaurant;
 use App\Models\Review;
 use App\Models\User;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class AdminController extends Controller
@@ -54,5 +57,45 @@ class AdminController extends Controller
         Review::destroy($id);
 
         return response()->json(['message' => 'レビューを削除しました。']);
+    }
+
+    public function reports()
+    {
+        $reports = Report::with(['reporter', 'targetUser', 'resolver', 'actions.admin'])
+            ->latest()
+            ->paginate(30);
+
+        return ReportResource::collection($reports);
+    }
+
+    public function updateReport(Request $request, $id)
+    {
+        $report = Report::findOrFail($id);
+
+        $validated = $request->validate([
+            'status' => 'required|in:pending,in_progress,resolved',
+            'admin_note' => 'nullable|string|max:1000',
+        ]);
+
+        $oldStatus = $report->status;
+
+        $report->update([
+            'status' => $validated['status'],
+            'admin_note' => $validated['admin_note'] ?? $report->admin_note,
+            'resolved_by' => $validated['status'] === 'resolved' ? Auth::id() : $report->resolved_by,
+        ]);
+
+        if ($oldStatus !== $validated['status']) {
+            $report->actions()->create([
+                'admin_id' => Auth::id(),
+                'action' => 'status_changed',
+                'note' => "ステータスを「{$oldStatus}」から「{$validated['status']}」に変更",
+                'created_at' => now(),
+            ]);
+        }
+
+        $report->load(['reporter', 'targetUser', 'resolver', 'actions.admin']);
+
+        return new ReportResource($report);
     }
 }

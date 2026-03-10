@@ -130,7 +130,8 @@ export function useHideRoom() {
 export function useBlockUser() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (userId: number) => chatApi.blockUser(userId),
+    mutationFn: ({ restaurantId, userId }: { restaurantId: number; userId: number }) =>
+      chatApi.blockUser(restaurantId, userId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chatRooms'] });
       queryClient.invalidateQueries({ queryKey: ['blockStatus'] });
@@ -141,7 +142,8 @@ export function useBlockUser() {
 export function useUnblockUser() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (userId: number) => chatApi.unblockUser(userId),
+    mutationFn: ({ restaurantId, userId }: { restaurantId: number; userId: number }) =>
+      chatApi.unblockUser(restaurantId, userId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chatRooms'] });
       queryClient.invalidateQueries({ queryKey: ['blockStatus'] });
@@ -149,11 +151,11 @@ export function useUnblockUser() {
   });
 }
 
-export function useBlockStatus(userId: number | null) {
+export function useBlockStatus(restaurantId: number | null, userId: number | null) {
   return useQuery({
-    queryKey: ['blockStatus', userId],
-    queryFn: () => chatApi.getBlockStatus(userId!),
-    enabled: !!userId,
+    queryKey: ['blockStatus', restaurantId, userId],
+    queryFn: () => chatApi.getBlockStatus(restaurantId!, userId!),
+    enabled: !!restaurantId && !!userId,
   });
 }
 

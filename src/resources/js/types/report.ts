@@ -11,7 +11,7 @@ export interface AdminReport {
   reporter: { id: number; name: string } | null;
   target_user: { id: number; name: string } | null;
   reason: string;
-  status: 'pending' | 'resolved';
+  status: 'pending' | 'in_progress' | 'resolved';
   admin_note: string | null;
   resolver: { id: number; name: string } | null;
   actions: ReportAction[];

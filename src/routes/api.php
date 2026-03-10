@@ -88,10 +88,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/chat/messages/{messageId}/hide', [ChatController::class, 'hideMessage']);
     Route::post('/chat/rooms/{roomId}/hide', [ChatController::class, 'hideRoom']);
 
-    // Block
-    Route::get('/users/{userId}/block-status', [BlockController::class, 'status']);
-    Route::post('/users/{userId}/block', [BlockController::class, 'store']);
-    Route::delete('/users/{userId}/block', [BlockController::class, 'destroy']);
+    // Block (店舗単位)
+    Route::get('/restaurants/{restaurantId}/block-status', [BlockController::class, 'status']);
+    Route::post('/restaurants/{restaurantId}/block', [BlockController::class, 'store']);
+    Route::delete('/restaurants/{restaurantId}/block', [BlockController::class, 'destroy']);
 
     // Report
     Route::get('/users/{userId}/report-status', [ReportController::class, 'status']);
@@ -111,5 +111,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/users/{id}', [AdminController::class, 'destroyUser']);
         Route::delete('/restaurants/{id}', [AdminController::class, 'destroyRestaurant']);
         Route::delete('/reviews/{id}', [AdminController::class, 'destroyReview']);
+        Route::get('/reports', [AdminController::class, 'reports']);
+        Route::patch('/reports/{id}', [AdminController::class, 'updateReport']);
     });
 });

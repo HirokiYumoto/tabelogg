@@ -2,6 +2,7 @@ import apiClient from './client';
 import type { User } from '@/types/user';
 import type { Restaurant } from '@/types/restaurant';
 import type { Review } from '@/types/review';
+import type { AdminReport } from '@/types/report';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -32,4 +33,19 @@ export async function deleteAdminRestaurant(id: number): Promise<void> {
 
 export async function deleteAdminReview(id: number): Promise<void> {
   await apiClient.delete(`/admin/reviews/${id}`);
+}
+
+export async function getAdminReports(params?: {
+  page?: number;
+}): Promise<PaginatedResponse<AdminReport>> {
+  const { data } = await apiClient.get('/admin/reports', { params });
+  return data;
+}
+
+export async function updateReport(
+  id: number,
+  payload: { status: AdminReport['status']; admin_note?: string | null }
+): Promise<AdminReport> {
+  const { data } = await apiClient.patch(`/admin/reports/${id}`, payload);
+  return data.data;
 }

@@ -50,7 +50,8 @@ export function useChatPageActions({
   const blockMutation = useBlockUser();
   const unblockMutation = useUnblockUser();
   const reportMutation = useReport();
-  const { data: blockStatus } = useBlockStatus(otherUserId);
+  const restaurantId = selectedRoom?.restaurant.id ?? newChatRestaurantId ?? null;
+  const { data: blockStatus } = useBlockStatus(restaurantId, otherUserId);
   const { data: reportStatus } = useReportStatus(otherUserId);
 
   const handleSend = useCallback(
@@ -147,15 +148,15 @@ export function useChatPageActions({
   );
 
   const handleBlock = useCallback(() => {
-    if (!otherUserId) return;
+    if (!otherUserId || !restaurantId) return;
     if (blockStatus?.blocking) {
       if (!confirm('ブロックを解除しますか？')) return;
-      unblockMutation.mutate(otherUserId);
+      unblockMutation.mutate({ restaurantId, userId: otherUserId });
     } else {
-      if (!confirm('このユーザーをブロックしますか？\nブロックするとメッセージの送受信ができなくなります。')) return;
-      blockMutation.mutate(otherUserId);
+      if (!confirm('このユーザーをブロックしますか？\nブロックするとこの店舗でのメッセージの送受信ができなくなります。')) return;
+      blockMutation.mutate({ restaurantId, userId: otherUserId });
     }
-  }, [otherUserId, blockStatus, blockMutation, unblockMutation]);
+  }, [otherUserId, restaurantId, blockStatus, blockMutation, unblockMutation]);
 
   const handleReportUser = useCallback(() => {
     if (!otherUserId) return;

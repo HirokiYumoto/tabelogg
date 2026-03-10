@@ -13,7 +13,7 @@ use App\Models\ChatMessageImage;
 use App\Models\ChatRoom;
 use App\Models\ChatRoomDeletion;
 use App\Models\Restaurant;
-use App\Models\UserBlock;
+use App\Models\RestaurantBlock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -48,9 +48,10 @@ class ChatController extends Controller
     {
         $userId = Auth::id();
 
-        // 自分がブロックした相手のユーザーID（ブロックされた側のルームは表示する）
-        $blockedByMeUserIds = UserBlock::where('blocker_id', $userId)
-            ->pluck('blocked_id');
+        // 自分がブロックした店舗のブロック情報を取得（店舗単位）
+        $blockedByMe = RestaurantBlock::where('blocker_id', $userId)
+            ->select('restaurant_id', 'user_id')
+            ->get();
 
         $rooms = ChatRoom::with(['restaurant.images', 'user', 'latestMessage'])
             ->withCount(['messages as unread_count' => function ($query) use ($userId) {
@@ -60,10 +61,16 @@ class ChatController extends Controller
                 $query->where('user_id', $userId)
                     ->orWhereHas('restaurant', fn ($q) => $q->where('user_id', $userId));
             })
-            // 自分がブロックした相手とのルームのみ除外
-            ->when($blockedByMeUserIds->isNotEmpty(), function ($query) use ($blockedByMeUserIds) {
-                $query->whereNotIn('user_id', $blockedByMeUserIds)
-                    ->whereDoesntHave('restaurant', fn ($q) => $q->whereIn('user_id', $blockedByMeUserIds));
+            // 自分がブロックした店舗×ユーザーの組み合わせのルームのみ除外
+            ->when($blockedByMe->isNotEmpty(), function ($query) use ($blockedByMe) {
+                $query->where(function ($q) use ($blockedByMe) {
+                    foreach ($blockedByMe as $block) {
+                        $q->whereNot(function ($sub) use ($block) {
+                            $sub->where('restaurant_id', $block->restaurant_id)
+                                ->where('user_id', $block->user_id);
+                        });
+                    }
+                });
             })
             ->orderByDesc(
                 ChatMessage::select('created_at')
@@ -135,12 +142,18 @@ class ChatController extends Controller
         $restaurant = Restaurant::findOrFail($restaurantId);
         $userId = Auth::id();
 
-        // ブロックチェック
-        $isBlocked = UserBlock::where(function ($q) use ($userId, $restaurant) {
-            $q->where('blocker_id', $userId)->where('blocked_id', $restaurant->user_id);
-        })->orWhere(function ($q) use ($userId, $restaurant) {
-            $q->where('blocker_id', $restaurant->user_id)->where('blocked_id', $userId);
-        })->exists();
+        // ブロックチェック（店舗単位）
+        $chatUserId = ($userId === $restaurant->user_id)
+            ? ChatRoom::where('id', $request->integer('room_id'))
+                ->where('restaurant_id', $restaurantId)
+                ->value('user_id')
+            : $userId;
+
+        $isBlocked = $chatUserId
+            ? RestaurantBlock::where('restaurant_id', $restaurantId)
+                ->where('user_id', $chatUserId)
+                ->exists()
+            : false;
 
         if ($isBlocked) {
             abort(403, 'ブロック中のためメッセージを送信できません。');

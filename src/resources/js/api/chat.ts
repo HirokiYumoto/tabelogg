@@ -61,17 +61,19 @@ export async function hideRoom(roomId: number): Promise<void> {
   await apiClient.post(`/chat/rooms/${roomId}/hide`);
 }
 
-export async function getBlockStatus(userId: number): Promise<BlockStatus> {
-  const { data } = await apiClient.get(`/users/${userId}/block-status`);
+export async function getBlockStatus(restaurantId: number, userId: number): Promise<BlockStatus> {
+  const { data } = await apiClient.get(`/restaurants/${restaurantId}/block-status`, {
+    params: { user_id: userId },
+  });
   return data;
 }
 
-export async function blockUser(userId: number): Promise<void> {
-  await apiClient.post(`/users/${userId}/block`);
+export async function blockUser(restaurantId: number, userId: number): Promise<void> {
+  await apiClient.post(`/restaurants/${restaurantId}/block`, { user_id: userId });
 }
 
-export async function unblockUser(userId: number): Promise<void> {
-  await apiClient.delete(`/users/${userId}/block`);
+export async function unblockUser(restaurantId: number, userId: number): Promise<void> {
+  await apiClient.delete(`/restaurants/${restaurantId}/block`, { data: { user_id: userId } });
 }
 
 export async function sendReport(targetUserId: number, reason: string): Promise<void> {
